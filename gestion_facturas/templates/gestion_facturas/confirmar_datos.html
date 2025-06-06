@@ -1,0 +1,74 @@
+{% extends 'gestion_facturas/base.html' %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title mb-0">
+                        <i class="fas fa-check-circle"></i> Confirmar Datos de la Factura
+                    </h3>
+                </div>
+                <div class="card-body">
+                    {% if messages %}
+                    <div class="messages mb-4">
+                        {% for message in messages %}
+                        <div class="alert alert-{{ message.tags }}">
+                            {{ message }}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <h5>Vista Previa</h5>
+                            <img src="{{ imagen_url }}" class="img-fluid rounded" alt="Vista previa de la factura">
+                        </div>
+                        <div class="col-md-6">
+                            <form method="post" enctype="multipart/form-data">
+                                {% csrf_token %}
+                                <input type="hidden" name="tipo" value="{{ tipo }}">
+                                <input type="hidden" name="imagen" value="{{ imagen_url }}">
+
+                                <div class="mb-3">
+                                    <label for="numero" class="form-label">Número de Factura</label>
+                                    <input type="text" class="form-control" id="numero" name="numero" value="{{ datos.numero }}" required>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="fecha" class="form-label">Fecha de Emisión</label>
+                                    <input type="text" class="form-control" id="fecha" name="fecha" value="{{ datos.fecha }}" required>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="cliente" class="form-label">Cliente</label>
+                                    <input type="text" class="form-control" id="cliente" name="cliente" value="{{ datos.cliente }}" required>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="cuit" class="form-label">CUIT</label>
+                                    <input type="text" class="form-control" id="cuit" name="cuit" value="{{ datos.cuit }}" required>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="monto_total" class="form-label">Monto Total</label>
+                                    <input type="text" class="form-control" id="monto_total" name="monto_total" value="{{ datos.monto_total }}" required>
+                                </div>
+
+                                <div class="text-end">
+                                    <a href="{% url 'gestion_facturas:cargar_factura' %}" class="btn btn-secondary">Cancelar</a>
+                                    <button type="submit" class="btn btn-success">
+                                        <i class="fas fa-save"></i> Guardar Factura
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

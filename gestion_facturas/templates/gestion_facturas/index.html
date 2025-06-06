@@ -1,0 +1,42 @@
+{% extends 'gestion_facturas/base.html' %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row">
+        <div class="col-md-12 text-center">
+            <h1 class="display-4 mb-4">Sistema de Gestión de Facturas</h1>
+            <p class="lead">Bienvenido al sistema de gestión de facturas. Aquí podrás cargar y gestionar tus facturas de manera eficiente.</p>
+        </div>
+    </div>
+    
+    <div class="row mt-5">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h3 class="card-title">
+                        <i class="fas fa-list"></i> Ver Facturas
+                    </h3>
+                    <p class="card-text">Accede al listado completo de facturas registradas en el sistema.</p>
+                    <a href="{% url 'gestion_facturas:lista_facturas' %}" class="btn btn-primary">
+                        Ver Lista
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h3 class="card-title">
+                        <i class="fas fa-plus"></i> Nueva Factura
+                    </h3>
+                    <p class="card-text">Carga una nueva factura al sistema para su procesamiento.</p>
+                    <a href="{% url 'gestion_facturas:cargar_factura' %}" class="btn btn-success">
+                        Cargar Factura
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

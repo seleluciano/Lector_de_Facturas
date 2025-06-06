@@ -1,0 +1,57 @@
+{% extends 'gestion_facturas/base.html' %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row mb-4">
+        <div class="col">
+            <h2>Lista de Facturas</h2>
+        </div>
+        <div class="col text-end">
+            <a href="{% url 'gestion_facturas:cargar_factura' %}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Nueva Factura
+            </a>
+        </div>
+    </div>
+
+    {% if facturas %}
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Tipo</th>
+                    <th>Número</th>
+                    <th>Fecha</th>
+                    <th>Cliente</th>
+                    <th>CUIT</th>
+                    <th>Monto</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for factura in facturas %}
+                <tr>
+                    <td>{{ factura.get_tipo_factura_display }}</td>
+                    <td>{{ factura.numero }}</td>
+                    <td>{{ factura.fecha_emision|date:"d/m/Y" }}</td>
+                    <td>{{ factura.cliente }}</td>
+                    <td>{{ factura.cuit }}</td>
+                    <td>${{ factura.monto_total }}</td>
+                    <td>
+                        {% if factura.imagen %}
+                        <a href="{{ factura.imagen.url }}" class="btn btn-sm btn-info" target="_blank">
+                            <i class="fas fa-eye"></i> Ver
+                        </a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="alert alert-info">
+        No hay facturas registradas. <a href="{% url 'gestion_facturas:cargar_factura' %}">Cargar una nueva factura</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %} 
