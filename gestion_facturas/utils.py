@@ -291,7 +291,7 @@ def extraer_datos_factura(texto):
 
     # Patrón flexible para números monetarios (con o sin separador de miles, con coma o punto decimal)
     # Captura el número completo en el grupo 1
-    patron_valor_numerico = r'(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?)'
+    patron_valor_numerico = r'(\d{1,3}(?:\.\d{3})*(?:,\d+)?)'
 
     # Patrones para buscar información
     patrones = {
@@ -416,7 +416,7 @@ def extraer_productos(texto):
     # Captura el número completo en el grupo 1 (ej. '1234.56')
     # Importante: Este patrón ya define su propio grupo de captura (\d{1,3}...), 
     # así que cuando lo usemos dentro de otro patrón, el grupo capturado será el de este patrón.
-    patron_valor_numerico = r'(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?)'
+    patron_valor_numerico = r'(\d{1,3}(?:\.\d{3})*(?:,\d+)?)'
 
     # Patrón para porcentajes (ej. 19%, 7%)
     patron_porcentaje = r'(\d+%?)'
@@ -461,9 +461,20 @@ def extraer_productos(texto):
 
                 # Limpiar y convertir a float. Usar 0.0 si el string está vacío después de limpiar.
                 cantidad = float(cantidad_str.replace(',', '.')) if cantidad_str else 0.0
-                precio_unitario = float(re.sub(r'[^\\d.,]', '', precio_unitario_str).replace(',', '.')) if precio_unitario_str else 0.0
-                importe_bonificado = float(re.sub(r'[^\\d.,]', '', importe_bonificado_str).replace(',', '.')) if importe_bonificado_str else 0.0
-                subtotal = float(re.sub(r'[^\\d.,]', '', subtotal_str).replace(',', '.')) if subtotal_str else 0.0
+
+                # Función auxiliar para limpiar y convertir valores monetarios con formato argentino (miles con . y decimal con ,)
+                def limpiar_y_convertir_moneda(valor_str):
+                    if not valor_str: return 0.0
+                    # Eliminar puntos de miles, reemplazar coma decimal por punto
+                    valor_limpio = valor_str.replace('.', '').replace(',', '.')
+                    try:
+                        return float(valor_limpio)
+                    except ValueError:
+                        return 0.0
+
+                precio_unitario = limpiar_y_convertir_moneda(precio_unitario_str)
+                importe_bonificado = limpiar_y_convertir_moneda(importe_bonificado_str)
+                subtotal = limpiar_y_convertir_moneda(subtotal_str)
                 
                 # Convertir porcentaje, eliminando el '%' si existe
                 bonificacion_porcentaje = float(bonf_porcentaje_str.replace('%', '').replace(',', '.')) if bonf_porcentaje_str else 0.0
