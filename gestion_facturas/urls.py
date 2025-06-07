@@ -12,6 +12,7 @@ urlpatterns = [
     path('facturas/', views.lista_facturas, name='lista_facturas'),
     path('facturas/cargar/', views.cargar_factura, name='cargar_factura'),
     path('facturas/confirmar/', views.confirmar_datos, name='confirmar_datos'),
+    path('facturas/guardar/', views.guardar_factura, name='guardar_factura'),
 ]
 
 if settings.DEBUG:

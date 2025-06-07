@@ -1,7 +1,7 @@
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from .models import Factura
-from .utils import procesar_factura
+from .utils import procesar_factura, preprocesar_imagen
 from django.core.files.storage import FileSystemStorage
 import os
 from datetime import datetime
@@ -9,6 +9,11 @@ import uuid
 import tempfile
 import shutil
 from django.conf import settings
+import cv2
+import numpy as np
+import base64
+from io import BytesIO
+from django.core.files.base import File
 
 # Create your views here.
 
@@ -17,80 +22,54 @@ def index(request):
 
 def cargar_factura(request):
     if request.method == 'POST':
-        if 'imagen' not in request.FILES:
-            messages.error(request, 'Por favor seleccione al menos una imagen')
-            return redirect('gestion_facturas:cargar_factura')
-        
-        imagenes = request.FILES.getlist('imagen')
-        facturas_procesadas = []
-        
-        # Crear directorio temporal en media si no existe
-        temp_dir = os.path.join(settings.MEDIA_ROOT, 'temp')
-        if not os.path.exists(temp_dir):
-            os.makedirs(temp_dir)
-        
-        for imagen in imagenes:
-            try:
-                print(f"Procesando archivo: {imagen.name}")
-                
-                # Verificar el formato del archivo
-                extension = os.path.splitext(imagen.name)[1].lower()
-                if extension not in ['.png', '.jpg', '.jpeg', '.pdf']:
-                    raise ValueError(f"Formato de archivo no soportado: {extension}. Solo se permiten archivos PNG, JPG y PDF.")
-                
-                # Generar nombre único para el archivo
-                nombre_archivo = f"{uuid.uuid4()}{extension}"
-                ruta_completa = os.path.join(temp_dir, nombre_archivo)
-                
-                # Guardar el archivo en el directorio temporal
-                try:
-                    with open(ruta_completa, 'wb+') as destino:
-                        for chunk in imagen.chunks():
-                            destino.write(chunk)
-                except Exception as e:
-                    raise ValueError(f"Error al guardar el archivo: {str(e)}")
-                
-                # Verificar que el archivo se guardó correctamente
-                if not os.path.exists(ruta_completa):
-                    raise FileNotFoundError("No se pudo guardar el archivo")
-                
-                # Verificar el tamaño del archivo
-                if os.path.getsize(ruta_completa) == 0:
-                    raise ValueError("El archivo está vacío")
-                
-                print(f"Archivo guardado en: {ruta_completa}")
-                
-                # Procesar la factura
-                datos = procesar_factura(ruta_completa)
-                
-                # Agregar a la lista de facturas procesadas
-                facturas_procesadas.append({
-                    'datos': datos,
-                    'imagen_url': f'/media/temp/{nombre_archivo}',
-                    'nombre_original': imagen.name,
-                    'ruta_temporal': ruta_completa
-                })
-                
-            except Exception as e:
-                print(f"Error al procesar {imagen.name}: {str(e)}")
-                messages.error(request, f'Error al procesar {imagen.name}: {str(e)}')
-                # Limpiar archivo temporal si existe
-                if 'ruta_completa' in locals() and os.path.exists(ruta_completa):
-                    try:
-                        os.remove(ruta_completa)
-                    except Exception as e:
-                        print(f"Error al eliminar archivo temporal: {str(e)}")
-        
-        if facturas_procesadas:
-            # Guardar las rutas temporales en la sesión para limpiar después
-            request.session['rutas_temporales'] = [f['ruta_temporal'] for f in facturas_procesadas]
+        try:
+            # Obtener la imagen del request
+            imagen = request.FILES.get('imagen')
+            if not imagen:
+                messages.error(request, 'No se proporcionó ninguna imagen')
+                return redirect('gestion_facturas:cargar_factura')
+
+            # Leer la imagen directamente
+            imagen_bytes = imagen.read()
+            imagen_array = np.frombuffer(imagen_bytes, np.uint8)
+            imagen_cv = cv2.imdecode(imagen_array, cv2.IMREAD_COLOR)
+            
+            if imagen_cv is None:
+                messages.error(request, 'No se pudo leer la imagen')
+                return redirect('gestion_facturas:cargar_factura')
+
+            # Convertir la imagen original a base64 para mostrarla
+            _, buffer = cv2.imencode('.png', imagen_cv)
+            imagen_original_base64 = base64.b64encode(buffer).decode('utf-8')
+
+            # Procesar la factura
+            datos = procesar_factura(imagen_cv)
+            print("Datos extraídos:", datos)  # Debug
+
+            # Crear diccionario con los datos de la factura procesada
+            factura_procesada = {
+                'imagen_original_base64': imagen_original_base64,
+                'datos': datos
+            }
+            print("Factura procesada:", factura_procesada)  # Debug
+
+            # Obtener facturas procesadas anteriormente
+            facturas_procesadas = request.session.get('facturas_procesadas', [])
+            facturas_procesadas.append(factura_procesada)
+            request.session['facturas_procesadas'] = facturas_procesadas
+            print("Facturas procesadas:", facturas_procesadas)  # Debug
+
+            # Renderizar la plantilla con los datos
             return render(request, 'gestion_facturas/confirmar_datos.html', {
-                'facturas': facturas_procesadas
+                'facturas': facturas_procesadas,
+                'debug': settings.DEBUG
             })
-        else:
-            messages.error(request, 'No se pudo procesar ninguna factura')
+
+        except Exception as e:
+            print(f"Error en cargar_factura: {str(e)}")
+            messages.error(request, f'Error al procesar la factura: {str(e)}')
             return redirect('gestion_facturas:cargar_factura')
-    
+
     return render(request, 'gestion_facturas/cargar_factura.html')
 
 def confirmar_datos(request):
@@ -140,3 +119,60 @@ def confirmar_datos(request):
 def lista_facturas(request):
     facturas = Factura.objects.all()
     return render(request, 'gestion_facturas/lista_facturas.html', {'facturas': facturas})
+
+def guardar_factura(request):
+    if request.method == 'POST':
+        try:
+            # Obtener las facturas procesadas de la sesión
+            facturas_procesadas = request.session.get('facturas_procesadas', [])
+            
+            for i, factura in enumerate(facturas_procesadas):
+                # Obtener la fecha del formulario
+                fecha_str = request.POST.get(f'fecha_{i+1}')
+                try:
+                    # Convertir la fecha de YYYY-MM-DD a datetime
+                    fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+                except ValueError:
+                    messages.error(request, f'Formato de fecha inválido: {fecha_str}')
+                    return redirect('gestion_facturas:cargar_factura')
+
+                # Crear nueva factura
+                nueva_factura = Factura(
+                    numero=request.POST.get(f'numero_{i+1}'),
+                    fecha_emision=fecha,
+                    cliente=request.POST.get(f'cliente_{i+1}'),
+                    cuit=request.POST.get(f'cuit_{i+1}'),
+                    monto_total=request.POST.get(f'total_{i+1}')
+                )
+                
+                # Convertir la imagen base64 a archivo
+                imagen_base64 = factura['imagen_original_base64']
+                imagen_bytes = base64.b64decode(imagen_base64)
+                
+                # Crear un archivo temporal
+                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+                temp_file.write(imagen_bytes)
+                temp_file.close()
+                
+                # Guardar la imagen en el modelo
+                with open(temp_file.name, 'rb') as f:
+                    nueva_factura.imagen.save(f'factura_{nueva_factura.numero}.png', File(f), save=True)
+                
+                # Eliminar el archivo temporal
+                os.unlink(temp_file.name)
+                
+                nueva_factura.save()
+            
+            # Limpiar la sesión
+            if 'facturas_procesadas' in request.session:
+                del request.session['facturas_procesadas']
+            
+            messages.success(request, 'Facturas guardadas exitosamente')
+            return redirect('gestion_facturas:lista_facturas')
+            
+        except Exception as e:
+            print(f"Error en guardar_factura: {str(e)}")
+            messages.error(request, f'Error al guardar las facturas: {str(e)}')
+            return redirect('gestion_facturas:cargar_factura')
+    
+    return redirect('gestion_facturas:cargar_factura')

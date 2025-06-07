@@ -38,57 +38,77 @@ if not configurar_tesseract():
     print("Por favor, instale Tesseract OCR desde: https://github.com/UB-Mannheim/tesseract/wiki")
     print("Asegúrese de que esté instalado en: C:\\Program Files\\Tesseract-OCR")
 
-def preprocesar_imagen(ruta_imagen):
+def preprocesar_imagen(imagen):
     """
     Preprocesa la imagen para mejorar la extracción de texto
     """
     try:
-        # Leer la imagen
-        imagen = cv2.imread(ruta_imagen)
-        if imagen is None:
-            raise ValueError("No se pudo leer la imagen")
+        print(f"Dimensiones de la imagen: {imagen.shape}")
 
         # Convertir a escala de grises
         gris = cv2.cvtColor(imagen, cv2.COLOR_BGR2GRAY)
+        print("Imagen convertida a escala de grises")
 
         # Aplicar umbral adaptativo
         umbral = cv2.adaptiveThreshold(
             gris, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
             cv2.THRESH_BINARY, 11, 2
         )
+        print("Umbral adaptativo aplicado")
 
         # Reducir ruido
         denoised = cv2.fastNlMeansDenoising(umbral)
+        print("Ruido reducido")
 
-        return denoised
+        # Aumentar el contraste
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+        contraste = clahe.apply(gris)
+        print("Contraste aumentado")
+
+        # Combinar resultados
+        resultado = cv2.bitwise_and(denoised, contraste)
+        print("Resultados combinados")
+
+        # Escalar la imagen si es muy pequeña
+        height, width = resultado.shape
+        if width < 1000:
+            scale = 1000 / width
+            resultado = cv2.resize(resultado, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+            print(f"Imagen escalada a {resultado.shape}")
+
+        # Asegurarse de que la imagen sea del tipo correcto
+        if resultado.dtype != np.uint8:
+            print("Convirtiendo resultado final a uint8")
+            resultado = (resultado * 255).astype(np.uint8)
+
+        print(f"Tipo final de la imagen: {resultado.dtype}")
+        print(f"Forma final de la imagen: {resultado.shape}")
+        
+        return resultado
     except Exception as e:
+        print(f"Error detallado en preprocesamiento: {str(e)}")
         raise ValueError(f"Error en el preprocesamiento de la imagen: {str(e)}")
 
 def extraer_texto(imagen):
     """
-    Extrae el texto de la imagen usando Tesseract OCR
+    Extrae el texto de una imagen usando Tesseract OCR
     """
     try:
-        # Verificar que Tesseract esté configurado
-        if not configurar_tesseract():
-            raise ValueError(
-                "Tesseract no está instalado o no se encuentra en el PATH. "
-                "Por favor, instale Tesseract OCR desde: "
-                "https://github.com/UB-Mannheim/tesseract/wiki"
-            )
-        
         # Configurar Tesseract
-        config = '--psm 6 --oem 3'
+        configurar_tesseract()
         
-        # Extraer texto
-        texto = pytesseract.image_to_string(imagen, config=config)
-        
-        if not texto.strip():
-            raise ValueError("No se pudo extraer texto de la imagen")
+        # Convertir la imagen a formato PIL
+        if isinstance(imagen, np.ndarray):
+            imagen_pil = Image.fromarray(cv2.cvtColor(imagen, cv2.COLOR_BGR2RGB))
+        else:
+            imagen_pil = imagen
             
-        return texto
+        # Realizar OCR
+        texto = pytesseract.image_to_string(imagen_pil, lang='spa')
+        return texto.strip()
     except Exception as e:
-        raise ValueError(f"Error al extraer texto: {str(e)}")
+        print(f"Error en extraer_texto: {str(e)}")
+        raise
 
 def extraer_datos_factura(texto):
     """
@@ -104,18 +124,37 @@ def extraer_datos_factura(texto):
     
     # Patrones para buscar información
     patrones = {
-        'numero': r'Factura\s*[A-Z]\s*(\d+)',
-        'fecha': r'(\d{2}/\d{2}/\d{4})',
-        'cuit': r'CUIT:\s*(\d{2}-\d{8}-\d{1})',
-        'monto_total': r'Total:\s*\$?\s*(\d+[.,]\d{2})'
+        'numero': [
+            r'Factura\s*[A-Z]\s*(\d+)',
+            r'Comp\.\s*[A-Z]\s*(\d+)',
+            r'[A-Z]\s*(\d{8})'
+        ],
+        'fecha': [
+            r'(\d{2}/\d{2}/\d{4})',
+            r'(\d{2}-\d{2}-\d{4})',
+            r'(\d{2}\.\d{2}\.\d{4})'
+        ],
+        'cuit': [
+            r'CUIT:\s*(\d{2}-\d{8}-\d{1})',
+            r'CUIT\s*(\d{2}-\d{8}-\d{1})',
+            r'(\d{2}-\d{8}-\d{1})'
+        ],
+        'monto_total': [
+            r'Total:\s*\$?\s*(\d+[.,]\d{2})',
+            r'Importe\s*Total:\s*\$?\s*(\d+[.,]\d{2})',
+            r'Total\s*Neto:\s*\$?\s*(\d+[.,]\d{2})'
+        ]
     }
     
     # Buscar cada patrón en el texto
-    for campo, patron in patrones.items():
-        match = re.search(patron, texto)
-        if match:
-            datos[campo] = match.group(1)
+    for campo, lista_patrones in patrones.items():
+        for patron in lista_patrones:
+            match = re.search(patron, texto)
+            if match:
+                datos[campo] = match.group(1)
+                break
     
+    print("Datos extraídos:", datos)  # Debug
     return datos
 
 def detectar_tipo_factura(texto):
@@ -179,117 +218,25 @@ def convertir_pdf_a_imagen(ruta_pdf):
     except Exception as e:
         raise ValueError(f"Error al convertir PDF a imagen: {str(e)}")
 
-def procesar_factura(ruta_archivo):
+def procesar_factura(imagen):
     """
-    Procesa una factura (imagen o PDF) y extrae la información relevante
+    Procesa una factura y extrae la información relevante directamente de la imagen original
     """
     try:
-        print(f"Intentando procesar archivo: {ruta_archivo}")
+        print(f"Procesando imagen de dimensiones: {imagen.shape}")
         
-        # Verificar que el archivo existe y es accesible
-        if not os.path.exists(ruta_archivo):
-            raise ValueError(f"No se encontró el archivo: {ruta_archivo}")
+        # Extraer texto directamente de la imagen original
+        texto = extraer_texto(imagen)
+        print("Texto extraído:", texto)  # Debug
         
-        # Verificar permisos de lectura
-        if not os.access(ruta_archivo, os.R_OK):
-            raise ValueError(f"No hay permisos de lectura para el archivo: {ruta_archivo}")
-
-        # Determinar el tipo de archivo
-        extension = os.path.splitext(ruta_archivo)[1].lower()
+        # Extraer datos
+        datos = extraer_datos_factura(texto)
         
-        # Si es PDF, convertirlo a imagen
-        if extension == '.pdf':
-            ruta_imagen = convertir_pdf_a_imagen(ruta_archivo)
-            es_temporal = True
-        else:
-            ruta_imagen = ruta_archivo
-            es_temporal = False
-
-        try:
-            # Intentar leer la imagen con PIL primero
-            try:
-                pil_image = Image.open(ruta_imagen)
-                # Convertir a RGB si es necesario
-                if pil_image.mode != 'RGB':
-                    pil_image = pil_image.convert('RGB')
-                # Convertir a array numpy para OpenCV
-                imagen = np.array(pil_image)
-                # Convertir de RGB a BGR (formato que usa OpenCV)
-                imagen = cv2.cvtColor(imagen, cv2.COLOR_RGB2BGR)
-            except Exception as e:
-                print(f"Error al leer la imagen con PIL: {str(e)}")
-                # Si falla PIL, intentar con OpenCV directamente
-                imagen = cv2.imread(ruta_imagen)
-                if imagen is None:
-                    raise ValueError(f"OpenCV no pudo leer la imagen: {ruta_imagen}")
-
-            print(f"Imagen leída correctamente. Dimensiones: {imagen.shape}")
-
-            # Convertir a escala de grises
-            gris = cv2.cvtColor(imagen, cv2.COLOR_BGR2GRAY)
-            print("Imagen convertida a escala de grises")
-
-            # Aplicar umbral adaptativo
-            umbral = cv2.adaptiveThreshold(
-                gris, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
-            )
-            print("Umbral adaptativo aplicado")
-
-            # Verificar que Tesseract está configurado
-            if not configurar_tesseract():
-                raise ValueError("Tesseract no está configurado correctamente")
-
-            # Extraer texto con manejo de errores específico
-            try:
-                texto = pytesseract.image_to_string(umbral, lang='spa')
-                print(f"Texto extraído: {texto[:100]}...")  # Mostrar los primeros 100 caracteres
-            except Exception as e:
-                raise ValueError(f"Error al extraer texto con Tesseract: {str(e)}")
-
-            if not texto.strip():
-                raise ValueError("No se pudo extraer texto de la imagen")
-
-            # Detectar tipo de factura
-            tipo = detectar_tipo_factura(texto)
-            print(f"Tipo de factura detectado: {tipo}")
-
-            # Extraer información usando expresiones regulares
-            numero = re.search(r'factura\s+n[°º]\s*:?\s*(\d+)', texto, re.IGNORECASE)
-            fecha = re.search(r'fecha\s*:?\s*(\d{1,2}/\d{1,2}/\d{2,4})', texto, re.IGNORECASE)
-            cliente = re.search(r'cliente\s*:?\s*([^\n]+)', texto, re.IGNORECASE)
-            cuit = re.search(r'cuit\s*:?\s*(\d{2}-\d{8}-\d{1})', texto, re.IGNORECASE)
-            monto = re.search(r'total\s*:?\s*\$?\s*(\d+[.,]\d{2})', texto, re.IGNORECASE)
-
-            # Crear diccionario con los datos extraídos
-            datos = {
-                'tipo': tipo,
-                'numero': numero.group(1) if numero else '',
-                'fecha': fecha.group(1) if fecha else '',
-                'cliente': cliente.group(1).strip() if cliente else '',
-                'cuit': cuit.group(1) if cuit else '',
-                'monto_total': monto.group(1) if monto else ''
-            }
-
-            print("Datos extraídos:", datos)
-            return datos
-
-        finally:
-            # Limpiar recursos
-            if 'imagen' in locals():
-                del imagen
-            if 'gris' in locals():
-                del gris
-            if 'umbral' in locals():
-                del umbral
-            if 'pil_image' in locals():
-                del pil_image
-            # Si era un PDF, eliminar la imagen temporal
-            if es_temporal and os.path.exists(ruta_imagen):
-                try:
-                    os.remove(ruta_imagen)
-                except Exception as e:
-                    print(f"Error al eliminar imagen temporal: {str(e)}")
-
+        # Detectar tipo de factura
+        tipo = detectar_tipo_factura(texto)
+        datos['tipo'] = tipo
+        
+        return datos
     except Exception as e:
-        print(f"Error completo al procesar la factura: {str(e)}")
-        raise Exception(f"Error al procesar la factura: {str(e)}") 
+        print(f"Error en procesar_factura: {str(e)}")
+        raise 
