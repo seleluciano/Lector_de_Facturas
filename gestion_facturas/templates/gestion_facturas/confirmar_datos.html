@@ -223,7 +223,7 @@
                                    class="form-control" 
                                    id="subtotal_{{ forloop.counter }}" 
                                    name="subtotal_{{ forloop.counter }}" 
-                                   value="{% if factura.datos.subtotal %}{{ factura.datos.subtotal|floatformat:2 }}{% endif %}" 
+                                   value="{{ factura.datos.subtotal|default:0|floatformat:2 }}" 
                                    required>
                         </div>
                     </div>
@@ -235,7 +235,7 @@
                                    class="form-control" 
                                    id="iva_{{ forloop.counter }}" 
                                    name="iva_{{ forloop.counter }}" 
-                                   value="{% if factura.datos.iva %}{{ factura.datos.iva|floatformat:2 }}{% endif %}" 
+                                   value="{{ factura.datos.iva|default:0|floatformat:2 }}" 
                                    required>
                         </div>
                     </div>
@@ -247,7 +247,7 @@
                                    class="form-control" 
                                    id="percepcion_iibb_{{ forloop.counter }}" 
                                    name="percepcion_iibb_{{ forloop.counter }}" 
-                                   value="{% if factura.datos.percepcion_iibb %}{{ factura.datos.percepcion_iibb|floatformat:2 }}{% endif %}" 
+                                   value="{{ factura.datos.percepcion_iibb|default:0|floatformat:2 }}" 
                                    required>
                         </div>
                     </div>
@@ -259,7 +259,7 @@
                                    class="form-control" 
                                    id="otros_tributos_{{ forloop.counter }}" 
                                    name="otros_tributos_{{ forloop.counter }}" 
-                                   value="{% if factura.datos.otros_tributos %}{{ factura.datos.otros_tributos|floatformat:2 }}{% endif %}" 
+                                   value="{{ factura.datos.otros_tributos|default:0|floatformat:2 }}" 
                                    required>
                         </div>
                     </div>

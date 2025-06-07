@@ -300,37 +300,47 @@ def extraer_datos_factura(texto):
             r'PV\s*:\s*(\d{4})'
         ],
         'numero': [
-            r'Nro(?:\.|s)?:?\s*(\d{8})',  # Más general para número, sin Comp.
+            r'Nro(?:\.|s)?:?\s*(\d{8})',
             r'Comprobante\s*Nro(?:\.|s)?:?\s*(\d{8})',
-            r'(\d{8})' # Catch-all 8-digit number, might need context
+            r'(\d{8})'
         ],
         'fecha': [
-            r'(\d{2}[/\-]\d{2}[/\-]\d{4})', # Admite / o -
+            r'(\d{2}[/\-]\d{2}[/\-]\d{4})',
             r'(\d{2}\.\d{2}\.\d{4})'
         ],
         'cuit_cliente': [
-            r'CUIT\s*(?:Cliente|del\s*Cliente|Comprador)?:?\s*(\d{2}[-\s]?\d{8}[-\s]?\d{1})', # Más flexible con espacios/guiones y etiquetas
+            r'CUIT\s*(?:Cliente|del\s*Cliente|Comprador)?:?\s*(\d{2}[-\s]?\d{8}[-\s]?\d{1})',
             r'CUIT\s*:\s*(\d{2}[-\s]?\d{8}[-\s]?\d{1})'
         ],
         'monto_total': [
             rf'Importe\s*Total:\s*\$?\s*{patron_valor_numerico}',
             rf'Total:\s*\$?\s*{patron_valor_numerico}',
-            rf'Total\s*Factura:\s*\$?\s*{patron_valor_numerico}'
+            rf'Total\s*Factura:\s*\$?\s*{patron_valor_numerico}',
+            rf'Total\s*Final:\s*\$?\s*{patron_valor_numerico}',
+            rf'Total\s*a\s*Pagar:\s*\$?\s*{patron_valor_numerico}',
+            rf'Total\s*C\$\s*I\.V\.A\.:\s*\$?\s*{patron_valor_numerico}'
         ],
         'subtotal': [
             rf'Subtotal:\s*\$?\s*{patron_valor_numerico}',
-            rf'Neto\s*Gravado:\s*\$?\s*{patron_valor_numerico}'
+            rf'Neto\s*Gravado:\s*\$?\s*{patron_valor_numerico}',
+            rf'Subtotal\s*Neto:\s*\$?\s*{patron_valor_numerico}',
+            rf'Importe\s*Neto:\s*\$?\s*{patron_valor_numerico}',
+            rf'Neto:\s*\$?\s*{patron_valor_numerico}'
         ],
         'iva': [
             rf'IVA\s*(?:\d+%?)?:\s*\$?\s*{patron_valor_numerico}',
             rf'IVA:\s*\$?\s*{patron_valor_numerico}',
             rf'Impuesto\s*IVA:\s*\$?\s*{patron_valor_numerico}',
-            rf'I\.V\.A\. ?:?\s*\$?\s*{patron_valor_numerico}'
+            rf'I\.V\.A\. ?:?\s*\$?\s*{patron_valor_numerico}',
+            rf'IVA\s*Discriminado:\s*\$?\s*{patron_valor_numerico}',
+            rf'IVA\s*Inscripto:\s*\$?\s*{patron_valor_numerico}'
         ],
         'percepcion_iibb': [
             rf'Percepci[oó]n\s*IIBB:\s*\$?\s*{patron_valor_numerico}',
             rf'IIBB:\s*\$?\s*{patron_valor_numerico}',
-            rf'IIBB\s*(?:\d+%?)?:\s*\$?\s*{patron_valor_numerico}'
+            rf'IIBB\s*(?:\d+%?)?:\s*\$?\s*{patron_valor_numerico}',
+            rf'Percepci[oó]n\s*Ingresos\s*Brutos:\s*\$?\s*{patron_valor_numerico}',
+            rf'Percepci[oó]n\s*IB:\s*\$?\s*{patron_valor_numerico}'
         ],
         'otros_tributos': [
             rf'Otros\s*Tributos:\s*\$?\s*{patron_valor_numerico}',
@@ -368,22 +378,26 @@ def extraer_datos_factura(texto):
                      datos['numero'] = match.group(1)
                 elif campo in ['iva', 'percepcion_iibb', 'monto_total', 'subtotal', 'otros_tributos']:
                     valor_str = match.group(len(match.groups()))
-                    valor_limpio = re.sub(r'[^\\d.,]', '', valor_str)
+                    # Mejorar la limpieza del valor numérico
+                    valor_limpio = re.sub(r'[^\d.,]', '', valor_str)
                     
+                    # Manejar diferentes formatos de números
                     if ',' in valor_limpio and '.' in valor_limpio:
+                        # Si hay ambos separadores, determinar cuál es el decimal
                         if valor_limpio.rfind('.') > valor_limpio.rfind(','):
                             valor_limpio = valor_limpio.replace(',', '')
                         else:
                             valor_limpio = valor_limpio.replace('.', '')
                             valor_limpio = valor_limpio.replace(',', '.')
                     elif ',' in valor_limpio:
-                         valor_limpio = valor_limpio.replace(',', '.')
-
+                        valor_limpio = valor_limpio.replace(',', '.')
+                    
                     try:
-                        datos[campo] = float(valor_limpio)
+                        valor_float = float(valor_limpio)
+                        datos[campo] = valor_float
                     except ValueError:
-                         print(f"Advertencia: No se pudo convertir a float el valor extraído para {campo}: {valor_str} (limpiado a {valor_limpio})") # Debug
-                         datos[campo] = 0 # Asignar 0 si falla la conversión
+                        print(f"Advertencia: No se pudo convertir a float el valor extraído para {campo}: {valor_str} (limpiado a {valor_limpio})")
+                        datos[campo] = 0
 
                 elif campo == 'cuit_cliente':
                      datos['cuit'] = match.group(1)
