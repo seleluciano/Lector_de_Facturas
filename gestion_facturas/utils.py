@@ -309,8 +309,7 @@ def extraer_datos_factura(texto):
             r'(\d{2}\.\d{2}\.\d{4})'
         ],
         'cuit_cliente': [
-            r'CUIT\s*(?:Cliente|del\s*Cliente|Comprador)?:?\s*(\d{2}[-\s]?\d{8}[-\s]?\d{1})',
-            r'CUIT\s*:\s*(\d{2}[-\s]?\d{8}[-\s]?\d{1})'
+            r'(?:CUIT|CUIL|DNI)\s*[.:\s]*(\d{2}[-\s]?\d{8}[-\s]?\d{1})'
         ],
         'monto_total': [
             rf'Importe\s*Total:\s*\$?\s*{patron_valor_numerico}',
@@ -369,46 +368,46 @@ def extraer_datos_factura(texto):
     for campo, lista_patrones in patrones.items():
         # Priorizar los patrones más específicos o completos
         for patron in lista_patrones:
-            match = re.search(patron, texto, re.IGNORECASE)
-            if match:
-                # Lógica específica para campos con grupos múltiples o nombres diferentes
-                if campo == 'punto_venta':
-                     datos['punto_venta'] = match.group(1)
-                elif campo == 'numero':
-                     datos['numero'] = match.group(1)
-                elif campo in ['iva', 'percepcion_iibb', 'monto_total', 'subtotal', 'otros_tributos']:
-                    valor_str = match.group(len(match.groups()))
-                    # Mejorar la limpieza del valor numérico
-                    valor_limpio = re.sub(r'[^\d.,]', '', valor_str)
-                    
-                    # Manejar diferentes formatos de números
-                    if ',' in valor_limpio and '.' in valor_limpio:
-                        # Si hay ambos separadores, determinar cuál es el decimal
-                        if valor_limpio.rfind('.') > valor_limpio.rfind(','):
-                            valor_limpio = valor_limpio.replace(',', '')
-                        else:
-                            valor_limpio = valor_limpio.replace('.', '')
-                            valor_limpio = valor_limpio.replace(',', '.')
-                    elif ',' in valor_limpio:
-                        valor_limpio = valor_limpio.replace(',', '.')
-                    
-                    try:
-                        valor_float = float(valor_limpio)
-                        datos[campo] = valor_float
-                    except ValueError:
-                        print(f"Advertencia: No se pudo convertir a float el valor extraído para {campo}: {valor_str} (limpiado a {valor_limpio})")
-                        datos[campo] = 0
-
-                elif campo == 'cuit_cliente':
-                     datos['cuit'] = match.group(1)
-
-                elif campo == 'razon_social_cliente':
-                     datos['razon_social_cliente'] = match.group(1).strip()
-
-                else:
-                    datos[campo] = match.group(1)
-
+            if campo == 'cuit_cliente':
+                # Buscar todos los CUITs en el texto
+                matches = list(re.finditer(patron, texto, re.IGNORECASE))
+                if len(matches) >= 2:
+                    # Tomar el segundo CUIT encontrado (asumiendo que el primero es el de la empresa)
+                    datos['cuit'] = matches[1].group(1)
                 break
+            else:
+                match = re.search(patron, texto, re.IGNORECASE)
+                if match:
+                    # Lógica específica para campos con grupos múltiples o nombres diferentes
+                    if campo == 'punto_venta':
+                         datos['punto_venta'] = match.group(1)
+                    elif campo == 'numero':
+                         datos['numero'] = match.group(1)
+                    elif campo in ['iva', 'percepcion_iibb', 'monto_total', 'subtotal', 'otros_tributos']:
+                        valor_str = match.group(len(match.groups()))
+                        # Mejorar la limpieza del valor numérico
+                        valor_limpio = re.sub(r'[^\d.,]', '', valor_str)
+                        
+                        # Manejar diferentes formatos de números
+                        if ',' in valor_limpio and '.' in valor_limpio:
+                            # Si hay ambos separadores, determinar cuál es el decimal
+                            if valor_limpio.rfind('.') > valor_limpio.rfind(','):
+                                valor_limpio = valor_limpio.replace(',', '')
+                            else:
+                                valor_limpio = valor_limpio.replace('.', '')
+                                valor_limpio = valor_limpio.replace(',', '.')
+                        elif ',' in valor_limpio:
+                            valor_limpio = valor_limpio.replace(',', '.')
+                        
+                        try:
+                            valor_float = float(valor_limpio)
+                            datos[campo] = valor_float
+                        except ValueError:
+                            print(f"Advertencia: No se pudo convertir a float el valor extraído para {campo}: {valor_str} (limpiado a {valor_limpio})")
+                            datos[campo] = 0
+                    else:
+                        datos[campo] = match.group(1)
+                    break
 
     datos['tipo_factura'] = detectar_tipo_factura(texto)
 
