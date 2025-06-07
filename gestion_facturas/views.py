@@ -6,6 +6,7 @@ from django.core.files.storage import FileSystemStorage
 import os
 from datetime import datetime
 import uuid
+import tempfile
 
 # Create your views here.
 
@@ -21,10 +22,8 @@ def cargar_factura(request):
         imagenes = request.FILES.getlist('imagen')
         facturas_procesadas = []
         
-        # Crear directorio temporal si no existe
-        temp_dir = os.path.join('temp')
-        if not os.path.exists(temp_dir):
-            os.makedirs(temp_dir)
+        # Usar el directorio temporal del sistema
+        temp_dir = tempfile.gettempdir()
         
         for imagen in imagenes:
             try:
@@ -33,14 +32,21 @@ def cargar_factura(request):
                 nombre_archivo = f"{uuid.uuid4()}{extension}"
                 ruta_completa = os.path.join(temp_dir, nombre_archivo)
                 
-                # Guardar la imagen
-                with open(ruta_completa, 'wb+') as destino:
-                    for chunk in imagen.chunks():
-                        destino.write(chunk)
+                # Guardar la imagen con manejo de permisos
+                try:
+                    with open(ruta_completa, 'wb+') as destino:
+                        for chunk in imagen.chunks():
+                            destino.write(chunk)
+                except PermissionError:
+                    raise PermissionError(f"No hay permisos para escribir en el directorio temporal: {temp_dir}")
                 
                 # Verificar que el archivo se guardó correctamente
                 if not os.path.exists(ruta_completa):
                     raise FileNotFoundError("No se pudo guardar el archivo")
+                
+                # Verificar permisos de lectura
+                if not os.access(ruta_completa, os.R_OK):
+                    raise PermissionError(f"No hay permisos de lectura para el archivo: {ruta_completa}")
                 
                 # Procesar la factura
                 datos = procesar_factura(ruta_completa)

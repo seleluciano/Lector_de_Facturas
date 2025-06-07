@@ -4,33 +4,36 @@ import pytesseract
 from PIL import Image
 import re
 import os
+import sys
 
 # Configurar la ruta de Tesseract
 def configurar_tesseract():
-    posibles_rutas = [
-        r'C:\Program Files\Tesseract-OCR\tesseract.exe',
-        r'C:\Program Files (x86)\Tesseract-OCR\tesseract.exe',
-        r'C:\Tesseract-OCR\tesseract.exe'
-    ]
+    ruta_base = r'C:\Program Files\Tesseract-OCR'
+    ruta_exe = os.path.join(ruta_base, 'tesseract.exe')
     
-    # Buscar Tesseract en las rutas posibles
-    for ruta in posibles_rutas:
-        if os.path.exists(ruta):
-            pytesseract.pytesseract.tesseract_cmd = ruta
-            return True
+    if os.path.exists(ruta_exe):
+        try:
+            # Configurar la ruta de Tesseract
+            pytesseract.pytesseract.tesseract_cmd = ruta_exe
+            
+            # Configurar TESSDATA_PREFIX
+            tessdata_dir = os.path.join(ruta_base, 'tessdata')
+            if os.path.exists(tessdata_dir):
+                os.environ['TESSDATA_PREFIX'] = tessdata_dir
+                print(f"Tesseract configurado en: {ruta_exe}")
+                print(f"TESSDATA_PREFIX configurado en: {tessdata_dir}")
+                return True
+        except Exception as e:
+            print(f"Error al configurar Tesseract: {str(e)}")
     
-    # Si no se encuentra en las rutas predeterminadas, intentar usar la variable de entorno PATH
-    try:
-        pytesseract.get_tesseract_version()
-        return True
-    except:
-        return False
+    print("No se pudo encontrar Tesseract en la ruta especificada")
+    return False
 
 # Intentar configurar Tesseract al importar el módulo
 if not configurar_tesseract():
-    print("ADVERTENCIA: Tesseract OCR no está instalado o no se encuentra en el PATH.")
+    print("ADVERTENCIA: Tesseract OCR no está instalado o no se encuentra en la ruta especificada.")
     print("Por favor, instale Tesseract OCR desde: https://github.com/UB-Mannheim/tesseract/wiki")
-    print("Asegúrese de que la ruta de instalación esté en el PATH del sistema.")
+    print("Asegúrese de que esté instalado en: C:\\Program Files\\Tesseract-OCR")
 
 def preprocesar_imagen(ruta_imagen):
     """
@@ -159,6 +162,14 @@ def procesar_factura(ruta_imagen):
     Procesa una imagen de factura y extrae la información relevante
     """
     try:
+        # Verificar que el archivo existe y es accesible
+        if not os.path.exists(ruta_imagen):
+            raise ValueError(f"No se encontró el archivo: {ruta_imagen}")
+        
+        # Verificar permisos de lectura
+        if not os.access(ruta_imagen, os.R_OK):
+            raise ValueError(f"No hay permisos de lectura para el archivo: {ruta_imagen}")
+
         # Leer la imagen
         imagen = cv2.imread(ruta_imagen)
         if imagen is None:
@@ -172,8 +183,18 @@ def procesar_factura(ruta_imagen):
             gris, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
         )
 
-        # Extraer texto
-        texto = pytesseract.image_to_string(umbral, lang='spa')
+        # Verificar que Tesseract está configurado
+        if not configurar_tesseract():
+            raise ValueError("Tesseract no está configurado correctamente")
+
+        # Extraer texto con manejo de errores específico
+        try:
+            texto = pytesseract.image_to_string(umbral, lang='spa')
+        except Exception as e:
+            raise ValueError(f"Error al extraer texto con Tesseract: {str(e)}")
+
+        if not texto.strip():
+            raise ValueError("No se pudo extraer texto de la imagen")
 
         # Detectar tipo de factura
         tipo = detectar_tipo_factura(texto)
