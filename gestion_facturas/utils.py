@@ -459,8 +459,18 @@ def extraer_productos(texto):
                 importe_bonificado_str = match.group(6)
                 subtotal_str = match.group(7)
 
-                # Limpiar y convertir a float. Usar 0.0 si el string está vacío después de limpiar.
-                cantidad = float(cantidad_str.replace(',', '.')) if cantidad_str else 0.0
+                # Extraer la cantidad de la descripción (último número)
+                cantidad_descripcion = None
+                palabras_descripcion = descripcion.split()
+                if palabras_descripcion:
+                    ultima_palabra = palabras_descripcion[-1]
+                    if re.match(r'\d+[.,]?\d*$', ultima_palabra):
+                        cantidad_descripcion = float(ultima_palabra.replace(',', '.'))
+                        # Remover la cantidad de la descripción
+                        descripcion = ' '.join(palabras_descripcion[:-1])
+
+                # Usar la cantidad de la descripción si existe, sino usar la cantidad original
+                cantidad = cantidad_descripcion if cantidad_descripcion is not None else float(cantidad_str.replace(',', '.')) if cantidad_str else 0.0
 
                 # Función auxiliar para limpiar y convertir valores monetarios con formato argentino (miles con . y decimal con ,)
                 def limpiar_y_convertir_moneda(valor_str):
@@ -482,9 +492,9 @@ def extraer_productos(texto):
                 productos.append({
                     'cantidad': cantidad,
                     'descripcion': descripcion,
-                    'unidad_medida': unidad_medida, # Añadido
+                    'unidad_medida': unidad_medida,
                     'precio_unitario': precio_unitario,
-                    'porcentaje_bonificacion': bonificacion_porcentaje, # Añadido
+                    'porcentaje_bonificacion': bonificacion_porcentaje,
                     'importe_bonificado': importe_bonificado,
                     'subtotal': subtotal,
                 })
