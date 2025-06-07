@@ -6,8 +6,31 @@ import re
 import os
 
 # Configurar la ruta de Tesseract
-if os.name == 'nt':  # Windows
-    pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+def configurar_tesseract():
+    posibles_rutas = [
+        r'C:\Program Files\Tesseract-OCR\tesseract.exe',
+        r'C:\Program Files (x86)\Tesseract-OCR\tesseract.exe',
+        r'C:\Tesseract-OCR\tesseract.exe'
+    ]
+    
+    # Buscar Tesseract en las rutas posibles
+    for ruta in posibles_rutas:
+        if os.path.exists(ruta):
+            pytesseract.pytesseract.tesseract_cmd = ruta
+            return True
+    
+    # Si no se encuentra en las rutas predeterminadas, intentar usar la variable de entorno PATH
+    try:
+        pytesseract.get_tesseract_version()
+        return True
+    except:
+        return False
+
+# Intentar configurar Tesseract al importar el módulo
+if not configurar_tesseract():
+    print("ADVERTENCIA: Tesseract OCR no está instalado o no se encuentra en el PATH.")
+    print("Por favor, instale Tesseract OCR desde: https://github.com/UB-Mannheim/tesseract/wiki")
+    print("Asegúrese de que la ruta de instalación esté en el PATH del sistema.")
 
 def preprocesar_imagen(ruta_imagen):
     """
@@ -40,10 +63,10 @@ def extraer_texto(imagen):
     Extrae el texto de la imagen usando Tesseract OCR
     """
     try:
-        # Verificar que Tesseract esté instalado
-        if not os.path.exists(pytesseract.pytesseract.tesseract_cmd):
+        # Verificar que Tesseract esté configurado
+        if not configurar_tesseract():
             raise ValueError(
-                "Tesseract no está instalado o no se encuentra en la ruta especificada. "
+                "Tesseract no está instalado o no se encuentra en el PATH. "
                 "Por favor, instale Tesseract OCR desde: "
                 "https://github.com/UB-Mannheim/tesseract/wiki"
             )
@@ -89,20 +112,98 @@ def extraer_datos_factura(texto):
     
     return datos
 
+def detectar_tipo_factura(texto):
+    """
+    Detecta el tipo de factura basado en el texto extraído
+    """
+    texto = texto.lower()
+    
+    # Patrones para identificar el tipo de factura
+    patrones = {
+        'A': [
+            r'factura\s+a',
+            r'tipo\s+a',
+            r'comprobante\s+a'
+        ],
+        'B': [
+            r'factura\s+b',
+            r'tipo\s+b',
+            r'comprobante\s+b'
+        ],
+        'C': [
+            r'factura\s+c',
+            r'tipo\s+c',
+            r'comprobante\s+c'
+        ]
+    }
+    
+    # Buscar coincidencias
+    for tipo, lista_patrones in patrones.items():
+        for patron in lista_patrones:
+            if re.search(patron, texto):
+                return tipo
+    
+    # Si no se encuentra un tipo específico, intentar detectar por otros patrones
+    if re.search(r'iva\s+responsable\s+inscripto', texto):
+        return 'A'
+    elif re.search(r'iva\s+responsable\s+no\s+inscripto', texto):
+        return 'B'
+    elif re.search(r'iva\s+exento', texto):
+        return 'C'
+    
+    # Si no se puede determinar, devolver None
+    return None
+
 def procesar_factura(ruta_imagen):
     """
-    Procesa una factura completa y retorna los datos extraídos
+    Procesa una imagen de factura y extrae la información relevante
     """
     try:
-        # Preprocesar la imagen
-        imagen_procesada = preprocesar_imagen(ruta_imagen)
-        
+        # Leer la imagen
+        imagen = cv2.imread(ruta_imagen)
+        if imagen is None:
+            raise ValueError("No se pudo leer la imagen")
+
+        # Convertir a escala de grises
+        gris = cv2.cvtColor(imagen, cv2.COLOR_BGR2GRAY)
+
+        # Aplicar umbral adaptativo
+        umbral = cv2.adaptiveThreshold(
+            gris, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
+        )
+
         # Extraer texto
-        texto = extraer_texto(imagen_procesada)
-        
-        # Extraer datos
-        datos = extraer_datos_factura(texto)
-        
+        texto = pytesseract.image_to_string(umbral, lang='spa')
+
+        # Detectar tipo de factura
+        tipo = detectar_tipo_factura(texto)
+
+        # Extraer información usando expresiones regulares
+        numero = re.search(r'factura\s+n[°º]\s*:?\s*(\d+)', texto, re.IGNORECASE)
+        fecha = re.search(r'fecha\s*:?\s*(\d{1,2}/\d{1,2}/\d{2,4})', texto, re.IGNORECASE)
+        cliente = re.search(r'cliente\s*:?\s*([^\n]+)', texto, re.IGNORECASE)
+        cuit = re.search(r'cuit\s*:?\s*(\d{2}-\d{8}-\d{1})', texto, re.IGNORECASE)
+        monto = re.search(r'total\s*:?\s*\$?\s*(\d+[.,]\d{2})', texto, re.IGNORECASE)
+
+        # Crear diccionario con los datos extraídos
+        datos = {
+            'tipo': tipo,
+            'numero': numero.group(1) if numero else '',
+            'fecha': fecha.group(1) if fecha else '',
+            'cliente': cliente.group(1).strip() if cliente else '',
+            'cuit': cuit.group(1) if cuit else '',
+            'monto_total': monto.group(1) if monto else ''
+        }
+
         return datos
+
     except Exception as e:
-        raise ValueError(f"Error al procesar la factura: {str(e)}") 
+        raise Exception(f"Error al procesar la factura: {str(e)}")
+    finally:
+        # Limpiar recursos
+        if 'imagen' in locals():
+            del imagen
+        if 'gris' in locals():
+            del gris
+        if 'umbral' in locals():
+            del umbral 

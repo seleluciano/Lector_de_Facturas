@@ -2,12 +2,6 @@ from django.db import models
 from django.utils import timezone
 
 class Factura(models.Model):
-    TIPOS_FACTURA = [
-        ('A', 'Tipo A'),
-        ('B', 'Tipo B'),
-        ('C', 'Tipo C'),
-    ]
-
     ESTADOS_FACTURA = [
         ('PENDIENTE', 'Pendiente'),
         ('PAGADA', 'Pagada'),
@@ -15,7 +9,6 @@ class Factura(models.Model):
     ]
 
     numero = models.CharField(max_length=20, unique=True)
-    tipo_factura = models.CharField(max_length=1, choices=TIPOS_FACTURA, verbose_name='Tipo')
     fecha_emision = models.DateField(default=timezone.now)
     cliente = models.CharField(max_length=200)
     cuit = models.CharField(max_length=13, blank=True, null=True)
@@ -30,7 +23,7 @@ class Factura(models.Model):
     fecha_actualizacion = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"Factura {self.tipo_factura} {self.numero} - {self.cliente}"
+        return f"Factura {self.numero} - {self.cliente}"
 
     class Meta:
         verbose_name = "Factura"

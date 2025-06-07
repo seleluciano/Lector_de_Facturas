@@ -15,79 +15,90 @@ def index(request):
 def cargar_factura(request):
     if request.method == 'POST':
         if 'imagen' not in request.FILES:
-            messages.error(request, 'Por favor seleccione una imagen')
+            messages.error(request, 'Por favor seleccione al menos una imagen')
             return redirect('gestion_facturas:cargar_factura')
         
-        imagen = request.FILES['imagen']
-        tipo_factura = request.POST.get('tipo')
+        imagenes = request.FILES.getlist('imagen')
+        facturas_procesadas = []
         
         # Crear directorio temporal si no existe
         temp_dir = os.path.join('temp')
         if not os.path.exists(temp_dir):
             os.makedirs(temp_dir)
         
-        # Generar nombre único para el archivo
-        extension = os.path.splitext(imagen.name)[1]
-        nombre_archivo = f"{uuid.uuid4()}{extension}"
-        ruta_completa = os.path.join(temp_dir, nombre_archivo)
-        
-        # Guardar la imagen
-        try:
-            with open(ruta_completa, 'wb+') as destino:
-                for chunk in imagen.chunks():
-                    destino.write(chunk)
-            
-            # Verificar que el archivo se guardó correctamente
-            if not os.path.exists(ruta_completa):
-                raise FileNotFoundError("No se pudo guardar el archivo")
-            
-            # Procesar la factura
-            datos = procesar_factura(ruta_completa)
-            
-            # Preparar datos para la confirmación
-            context = {
-                'tipo': tipo_factura,
-                'datos': datos,
-                'imagen_url': f'/media/temp/{nombre_archivo}'
-            }
-            
-            return render(request, 'gestion_facturas/confirmar_datos.html', context)
-            
-        except Exception as e:
-            messages.error(request, f'Error al procesar la imagen: {str(e)}')
-            return redirect('gestion_facturas:cargar_factura')
-        finally:
-            # Limpiar archivo temporal
+        for imagen in imagenes:
             try:
-                if os.path.exists(ruta_completa):
-                    os.remove(ruta_completa)
+                # Generar nombre único para el archivo
+                extension = os.path.splitext(imagen.name)[1]
+                nombre_archivo = f"{uuid.uuid4()}{extension}"
+                ruta_completa = os.path.join(temp_dir, nombre_archivo)
+                
+                # Guardar la imagen
+                with open(ruta_completa, 'wb+') as destino:
+                    for chunk in imagen.chunks():
+                        destino.write(chunk)
+                
+                # Verificar que el archivo se guardó correctamente
+                if not os.path.exists(ruta_completa):
+                    raise FileNotFoundError("No se pudo guardar el archivo")
+                
+                # Procesar la factura
+                datos = procesar_factura(ruta_completa)
+                
+                # Agregar a la lista de facturas procesadas
+                facturas_procesadas.append({
+                    'datos': datos,
+                    'imagen_url': f'/media/temp/{nombre_archivo}',
+                    'nombre_original': imagen.name
+                })
+                
             except Exception as e:
-                print(f"Error al eliminar archivo temporal: {str(e)}")
+                messages.error(request, f'Error al procesar {imagen.name}: {str(e)}')
+            finally:
+                # Limpiar archivo temporal
+                try:
+                    if os.path.exists(ruta_completa):
+                        os.remove(ruta_completa)
+                except Exception as e:
+                    print(f"Error al eliminar archivo temporal: {str(e)}")
+        
+        if facturas_procesadas:
+            return render(request, 'gestion_facturas/confirmar_datos.html', {
+                'facturas': facturas_procesadas
+            })
+        else:
+            messages.error(request, 'No se pudo procesar ninguna factura')
+            return redirect('gestion_facturas:cargar_factura')
     
     return render(request, 'gestion_facturas/cargar_factura.html')
 
 def confirmar_datos(request):
     if request.method == 'POST':
         try:
-            # Crear nueva factura con los datos confirmados
-            factura = Factura(
-                tipo=request.POST.get('tipo'),
-                numero=request.POST.get('numero'),
-                fecha_emision=datetime.strptime(request.POST.get('fecha'), '%d/%m/%Y').date(),
-                cliente=request.POST.get('cliente'),
-                cuit=request.POST.get('cuit'),
-                monto_total=request.POST.get('monto_total')
-            )
+            # Obtener los datos de todas las facturas
+            facturas_data = request.POST.getlist('factura_data[]')
+            imagenes = request.FILES.getlist('imagen')
             
-            # Guardar la imagen
-            if 'imagen' in request.FILES:
-                factura.imagen = request.FILES['imagen']
+            for i, factura_data in enumerate(facturas_data):
+                # Crear nueva factura
+                factura = Factura(
+                    numero=request.POST.get(f'numero_{i}'),
+                    fecha_emision=datetime.strptime(request.POST.get(f'fecha_{i}'), '%d/%m/%Y').date(),
+                    cliente=request.POST.get(f'cliente_{i}'),
+                    cuit=request.POST.get(f'cuit_{i}'),
+                    monto_total=request.POST.get(f'monto_total_{i}')
+                )
+                
+                # Guardar la imagen si existe
+                if i < len(imagenes):
+                    factura.imagen = imagenes[i]
+                
+                factura.save()
             
-            factura.save()
-            messages.success(request, 'Factura guardada exitosamente')
+            messages.success(request, 'Facturas guardadas exitosamente')
             return redirect('gestion_facturas:lista_facturas')
         except Exception as e:
-            messages.error(request, f'Error al guardar la factura: {str(e)}')
+            messages.error(request, f'Error al guardar las facturas: {str(e)}')
             return redirect('gestion_facturas:cargar_factura')
     
     return redirect('gestion_facturas:cargar_factura')
