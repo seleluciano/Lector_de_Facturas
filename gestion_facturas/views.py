@@ -1,6 +1,6 @@
 from django.shortcuts import render, redirect
 from django.contrib import messages
-from .models import Factura
+from .models import Factura, ProductoFactura
 from .utils import procesar_factura, preprocesar_imagen
 from django.core.files.storage import FileSystemStorage
 import os
@@ -14,6 +14,7 @@ import numpy as np
 import base64
 from io import BytesIO
 from django.core.files.base import File
+import re
 
 # Create your views here.
 
@@ -46,6 +47,10 @@ def cargar_factura(request):
             datos = procesar_factura(imagen_cv)
             print("Datos extraídos:", datos)  # Debug
 
+            # La fecha ya viene en formato dd/mm/aaaa del OCR, la pasamos directamente como string
+            # No necesitamos parsearla a date object aquí para mostrarla en el input text
+            # Si la extracción no encontró fecha, datos['fecha'] será None, lo cual es correcto.
+
             # Crear diccionario con los datos de la factura procesada
             factura_procesada = {
                 'imagen_original_base64': imagen_original_base64,
@@ -60,6 +65,7 @@ def cargar_factura(request):
             print("Facturas procesadas:", facturas_procesadas)  # Debug
 
             # Renderizar la plantilla con los datos
+            print("Datos que se pasan a la plantilla (facturas_procesadas):", facturas_procesadas) # Debug adicional
             return render(request, 'gestion_facturas/confirmar_datos.html', {
                 'facturas': facturas_procesadas,
                 'debug': settings.DEBUG
@@ -67,7 +73,7 @@ def cargar_factura(request):
 
         except Exception as e:
             print(f"Error en cargar_factura: {str(e)}")
-            messages.error(request, f'Error al procesar la factura: {str(e)}')
+            messages.error(request, f'Error al procesar la imagen: {str(e)}')
             return redirect('gestion_facturas:cargar_factura')
 
     return render(request, 'gestion_facturas/cargar_factura.html')
@@ -84,7 +90,6 @@ def confirmar_datos(request):
                 factura = Factura(
                     numero=request.POST.get(f'numero_{i}'),
                     fecha_emision=datetime.strptime(request.POST.get(f'fecha_{i}'), '%d/%m/%Y').date(),
-                    cliente=request.POST.get(f'cliente_{i}'),
                     cuit=request.POST.get(f'cuit_{i}'),
                     monto_total=request.POST.get(f'monto_total_{i}')
                 )
@@ -127,22 +132,33 @@ def guardar_factura(request):
             facturas_procesadas = request.session.get('facturas_procesadas', [])
             
             for i, factura in enumerate(facturas_procesadas):
-                # Obtener la fecha del formulario
+                # Obtener la fecha del formulario (esperamos dd/mm/aaaa del input text)
                 fecha_str = request.POST.get(f'fecha_{i+1}')
-                try:
-                    # Convertir la fecha de YYYY-MM-DD a datetime
-                    fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
-                except ValueError:
-                    messages.error(request, f'Formato de fecha inválido: {fecha_str}')
-                    return redirect('gestion_facturas:cargar_factura')
+                fecha = None
+                if fecha_str:
+                    try:
+                        # Intentar parsear la fecha en formato dd/mm/aaaa
+                        fecha = datetime.strptime(fecha_str, '%d/%m/%Y').date()
+                    except ValueError:
+                        messages.error(request, f'Formato de fecha inválido para guardar: {fecha_str}. Esperado DD/MM/YYYY.')
+                        return redirect('gestion_facturas:cargar_factura')
 
                 # Crear nueva factura
                 nueva_factura = Factura(
                     numero=request.POST.get(f'numero_{i+1}'),
-                    fecha_emision=fecha,
-                    cliente=request.POST.get(f'cliente_{i+1}'),
+                    punto_venta=request.POST.get(f'punto_venta_{i+1}'),
+                    fecha_emision=fecha, # Usar el objeto date
                     cuit=request.POST.get(f'cuit_{i+1}'),
-                    monto_total=request.POST.get(f'total_{i+1}')
+                    monto_total=request.POST.get(f'total_{i+1}'),
+                    tipo_factura=request.POST.get(f'tipo_factura_{i+1}'),
+                    condicion_venta=request.POST.get(f'condicion_venta_{i+1}'),
+                    condicion_iva=request.POST.get(f'condicion_iva_{i+1}'),
+                    subtotal=request.POST.get(f'subtotal_{i+1}'),
+                    iva=request.POST.get(f'iva_{i+1}'),
+                    percepcion_iibb=request.POST.get(f'percepcion_iibb_{i+1}'),
+                    otros_tributos=request.POST.get(f'otros_tributos_{i+1}'),
+                    tipo_copia=request.POST.get(f'tipo_copia_{i+1}'),
+                    razon_social_cliente=request.POST.get(f'razon_social_cliente_{i+1}')
                 )
                 
                 # Convertir la imagen base64 a archivo
@@ -161,7 +177,64 @@ def guardar_factura(request):
                 # Eliminar el archivo temporal
                 os.unlink(temp_file.name)
                 
+                # Guardar la factura
                 nueva_factura.save()
+
+                # Guardar los productos
+                # Obtener todos los campos de productos del formulario
+                productos_data = {}
+                # Iterar sobre los keys para encontrar los campos de producto
+                for key in request.POST:
+                     if key.startswith(f'producto_'):
+                        # Extraer información del nombre del campo
+                        # Formato esperado: producto_[tipo]_[factura]_[indice]
+                        parts = key.split('_')
+                        if len(parts) == 4:
+                            tipo, factura_idx_str, prod_idx_str = parts[1], parts[2], parts[3]
+                            
+                            try:
+                                factura_idx = int(factura_idx_str)
+                                prod_idx = int(prod_idx_str)
+                                if factura_idx == i + 1:  # Solo procesar productos de esta factura
+                                    if prod_idx not in productos_data:
+                                        productos_data[prod_idx] = {}
+                                    productos_data[prod_idx][tipo] = request.POST.get(key)
+                            except ValueError:
+                                # Ignorar campos con índices no numéricos
+                                continue
+
+
+                # Crear los productos
+                for prod_idx, prod_data in productos_data.items():
+                    # Asegurarse de que la cantidad sea un número válido
+                    cantidad_str = prod_data.get('cantidad', '').replace(',', '.')
+                    # Obtener los nuevos campos
+                    precio_unitario_str = prod_data.get('precio_unitario', '')
+                    importe_bonificado_str = prod_data.get('importe_bonificado', '')
+                    subtotal_producto_str = prod_data.get('subtotal', '')
+
+                    try:
+                        cantidad = float(cantidad_str)
+                        # Convertir los nuevos campos a float, manejando posibles errores
+                        precio_unitario = float(precio_unitario_str.replace(',', '.')) if precio_unitario_str else 0.0
+                        importe_bonificado = float(importe_bonificado_str.replace(',', '.')) if importe_bonificado_str else 0.0
+                        subtotal_producto = float(subtotal_producto_str.replace(',', '.')) if subtotal_producto_str else 0.0
+
+                    except ValueError:
+                        # Si la cantidad o algún importe no es un número válido, saltar este producto
+                        print(f"Advertencia: Datos numéricos inválidos para el producto {prod_data.get('descripcion', '')}: Cantidad='{cantidad_str}', PU='{precio_unitario_str}', Bon='{importe_bonificado_str}', SubT='{subtotal_producto_str}'. Ignorando producto.")
+                        continue # Saltar al siguiente producto
+
+                    # Crear el objeto ProductoFactura
+                    if 'descripcion' in prod_data:
+                        ProductoFactura.objects.create(
+                            factura=nueva_factura,
+                            descripcion=prod_data['descripcion'],
+                            cantidad=cantidad,
+                            precio_unitario=precio_unitario,
+                            importe_bonificado=importe_bonificado,
+                            subtotal=subtotal_producto,
+                        )
             
             # Limpiar la sesión
             if 'facturas_procesadas' in request.session:

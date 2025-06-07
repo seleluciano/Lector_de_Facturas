@@ -21,9 +21,14 @@
                     <th>Tipo</th>
                     <th>Número</th>
                     <th>Fecha</th>
-                    <th>Cliente</th>
-                    <th>CUIT</th>
-                    <th>Monto</th>
+                    <th>CUIT/CUIL/DNI</th>
+                    <th>Razón Social Cliente</th>
+                    <th>Cond. IVA</th>
+                    <th>Cond. Venta</th>
+                    <th>Subtotal</th>
+                    <th>IVA</th>
+                    <th>IIBB</th>
+                    <th>Total</th>
                     <th>Acciones</th>
                 </tr>
             </thead>
@@ -31,17 +36,63 @@
                 {% for factura in facturas %}
                 <tr>
                     <td>{{ factura.get_tipo_factura_display }}</td>
-                    <td>{{ factura.numero }}</td>
+                    <td>{{ factura.punto_venta }}-{{ factura.numero }}</td>
                     <td>{{ factura.fecha_emision|date:"d/m/Y" }}</td>
-                    <td>{{ factura.cliente }}</td>
                     <td>{{ factura.cuit }}</td>
+                    <td>{{ factura.razon_social_cliente|default:'' }}</td>
+                    <td>{{ factura.get_condicion_iva_display }}</td>
+                    <td>{{ factura.get_condicion_venta_display }}</td>
+                    <td>${{ factura.subtotal }}</td>
+                    <td>${{ factura.iva }}</td>
+                    <td>${{ factura.percepcion_iibb }}</td>
                     <td>${{ factura.monto_total }}</td>
                     <td>
-                        {% if factura.imagen %}
-                        <a href="{{ factura.imagen.url }}" class="btn btn-sm btn-info" target="_blank">
-                            <i class="fas fa-eye"></i> Ver
-                        </a>
-                        {% endif %}
+                        <div class="btn-group">
+                            {% if factura.imagen %}
+                            <a href="{{ factura.imagen.url }}" class="btn btn-sm btn-info" target="_blank" title="Ver imagen">
+                                <i class="fas fa-eye"></i>
+                            </a>
+                            {% endif %}
+                            <button type="button" 
+                                    class="btn btn-sm btn-primary" 
+                                    data-bs-toggle="modal" 
+                                    data-bs-target="#productosModal{{ factura.id }}"
+                                    title="Ver productos">
+                                <i class="fas fa-list"></i>
+                            </button>
+                        </div>
+
+                        <!-- Modal para productos -->
+                        <div class="modal fade" id="productosModal{{ factura.id }}" tabindex="-1">
+                            <div class="modal-dialog modal-lg">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">Productos - Factura {{ factura.punto_venta }}-{{ factura.numero }}</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <div class="table-responsive">
+                                            <table class="table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Descripción</th>
+                                                        <th>Cantidad</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {% for producto in factura.productos.all %}
+                                                    <tr>
+                                                        <td>{{ producto.descripcion }}</td>
+                                                        <td>{{ producto.cantidad }}</td>
+                                                    </tr>
+                                                    {% endfor %}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </td>
                 </tr>
                 {% endfor %}

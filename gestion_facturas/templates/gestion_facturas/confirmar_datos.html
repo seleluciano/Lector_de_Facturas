@@ -21,9 +21,33 @@
 
                 <!-- Campos de datos -->
                 <div class="row">
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <div class="mb-3">
-                            <label for="numero_{{ forloop.counter }}" class="form-label">Número de Factura</label>
+                            <label for="tipo_factura_{{ forloop.counter }}" class="form-label">Tipo de Factura</label>
+                            <select class="form-select" 
+                                    id="tipo_factura_{{ forloop.counter }}" 
+                                    name="tipo_factura_{{ forloop.counter }}" 
+                                    required>
+                                <option value="A" {% if factura.datos.tipo_factura == 'A' %}selected{% endif %}>Factura A</option>
+                                <option value="B" {% if factura.datos.tipo_factura == 'B' %}selected{% endif %}>Factura B</option>
+                                <option value="C" {% if factura.datos.tipo_factura == 'C' %}selected{% endif %}>Factura C</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label for="punto_venta_{{ forloop.counter }}" class="form-label">Punto de Venta</label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="punto_venta_{{ forloop.counter }}" 
+                                   name="punto_venta_{{ forloop.counter }}" 
+                                   value="{{ factura.datos.punto_venta|default:'' }}" 
+                                   required>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label for="numero_{{ forloop.counter }}" class="form-label">Número</label>
                             <input type="text" 
                                    class="form-control" 
                                    id="numero_{{ forloop.counter }}" 
@@ -32,15 +56,30 @@
                                    required>
                         </div>
                     </div>
+                </div>
+
+                <div class="row">
                     <div class="col-md-6">
                         <div class="mb-3">
                             <label for="fecha_{{ forloop.counter }}" class="form-label">Fecha de Emisión</label>
-                            <input type="text" 
-                                   class="form-control" 
-                                   id="fecha_{{ forloop.counter }}" 
-                                   name="fecha_{{ forloop.counter }}" 
-                                   value="{{ factura.datos.fecha|default:'' }}" 
+                            <input type="text"
+                                   class="form-control"
+                                   id="fecha_{{ forloop.counter }}"
+                                   name="fecha_{{ forloop.counter }}"
+                                   value="{{ factura.datos.fecha|default:'' }}"
                                    required>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="tipo_copia_{{ forloop.counter }}" class="form-label">Tipo de Copia</label>
+                            <select class="form-select" 
+                                    id="tipo_copia_{{ forloop.counter }}" 
+                                    name="tipo_copia_{{ forloop.counter }}" 
+                                    required>
+                                <option value="ORIGINAL" {% if factura.datos.tipo_copia == 'ORIGINAL' %}selected{% endif %}>Original</option>
+                                <option value="DUPLICADO" {% if factura.datos.tipo_copia == 'DUPLICADO' %}selected{% endif %}>Duplicado</option>
+                            </select>
                         </div>
                     </div>
                 </div>
@@ -48,37 +87,194 @@
                 <div class="row">
                     <div class="col-md-6">
                         <div class="mb-3">
-                            <label for="cliente_{{ forloop.counter }}" class="form-label">Cliente</label>
-                            <input type="text" 
-                                   class="form-control" 
-                                   id="cliente_{{ forloop.counter }}" 
-                                   name="cliente_{{ forloop.counter }}" 
-                                   value="{{ factura.datos.cliente|default:'' }}" 
+                            <label for="cuit_{{ forloop.counter }}" class="form-label">CUIT/CUIL/DNI</label>
+                            <input type="text"
+                                   class="form-control"
+                                   id="cuit_{{ forloop.counter }}"
+                                   name="cuit_{{ forloop.counter }}"
+                                   value="{{ factura.datos.cuit|default:'' }}"
                                    required>
                         </div>
                     </div>
                     <div class="col-md-6">
                         <div class="mb-3">
-                            <label for="cuit_{{ forloop.counter }}" class="form-label">CUIT</label>
-                            <input type="text" 
-                                   class="form-control" 
-                                   id="cuit_{{ forloop.counter }}" 
-                                   name="cuit_{{ forloop.counter }}" 
-                                   value="{{ factura.datos.cuit|default:'' }}" 
-                                   required>
+                            <label for="razon_social_cliente_{{ forloop.counter }}" class="form-label">Razón Social Cliente</label>
+                            <input type="text"
+                                   class="form-control"
+                                   id="razon_social_cliente_{{ forloop.counter }}"
+                                   name="razon_social_cliente_{{ forloop.counter }}"
+                                   value="{{ factura.datos.razon_social_cliente|default:'' }}">
                         </div>
                     </div>
                 </div>
 
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="condicion_venta_{{ forloop.counter }}" class="form-label">Condición de Venta</label>
+                            <select class="form-select" 
+                                    id="condicion_venta_{{ forloop.counter }}" 
+                                    name="condicion_venta_{{ forloop.counter }}" 
+                                    required>
+                                <option value="CONTADO" {% if factura.datos.condicion_venta == 'CONTADO' %}selected{% endif %}>Contado</option>
+                                <option value="CUENTA_CORRIENTE" {% if factura.datos.condicion_venta == 'CUENTA_CORRIENTE' %}selected{% endif %}>Cuenta Corriente</option>
+                                <option value="TARJETA_DEBITO" {% if factura.datos.condicion_venta == 'TARJETA_DEBITO' %}selected{% endif %}>Tarjeta de Débito</option>
+                                <option value="TARJETA_CREDITO" {% if factura.datos.condicion_venta == 'TARJETA_CREDITO' %}selected{% endif %}>Tarjeta de Crédito</option>
+                                <option value="OTRO" {% if factura.datos.condicion_venta == 'OTRO' %}selected{% endif %}>Otro</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="condicion_iva_{{ forloop.counter }}" class="form-label">Condición IVA</label>
+                            <select class="form-select" 
+                                    id="condicion_iva_{{ forloop.counter }}" 
+                                    name="condicion_iva_{{ forloop.counter }}" 
+                                    required>
+                                <option value="RESPONSABLE_INSCRIPTO" {% if factura.datos.condicion_iva == 'RESPONSABLE_INSCRIPTO' %}selected{% endif %}>Responsable Inscripto</option>
+                                <option value="RESPONSABLE_NO_INSCRIPTO" {% if factura.datos.condicion_iva == 'RESPONSABLE_NO_INSCRIPTO' %}selected{% endif %}>Responsable No Inscripto</option>
+                                <option value="EXENTO" {% if factura.datos.condicion_iva == 'EXENTO' %}selected{% endif %}>Exento</option>
+                                <option value="MONOTRIBUTO" {% if factura.datos.condicion_iva == 'MONOTRIBUTO' %}selected{% endif %}>Monotributo</option>
+                                <option value="CONSUMIDOR_FINAL" {% if factura.datos.condicion_iva == 'CONSUMIDOR_FINAL' %}selected{% endif %}>Consumidor Final</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Productos -->
                 <div class="mb-3">
-                    <label for="total_{{ forloop.counter }}" class="form-label">Monto Total</label>
-                    <input type="number" 
-                           step="0.01" 
-                           class="form-control" 
-                           id="total_{{ forloop.counter }}" 
-                           name="total_{{ forloop.counter }}" 
-                           value="{{ factura.datos.monto_total|default:'' }}" 
-                           required>
+                    <h6>Productos:</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Descripción</th>
+                                    <th>Cantidad</th>
+                                    <th>Precio Unitario</th>
+                                    <th>Bonificación</th>
+                                    <th>Subtotal</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="productos_{{ forloop.counter }}">
+                                {% for producto in factura.datos.productos %}
+                                <tr>
+                                    <td>
+                                        <input type="text" 
+                                               class="form-control form-control-sm" 
+                                               name="producto_descripcion_{{ forloop.parentloop.counter }}_{{ forloop.counter }}" 
+                                               value="{{ producto.descripcion|default:'' }}" 
+                                               required>
+                                    </td>
+                                    <td>
+                                        <input type="text" 
+                                               class="form-control form-control-sm cantidad" 
+                                               name="producto_cantidad_{{ forloop.parentloop.counter }}_{{ forloop.counter }}" 
+                                               value="{{ producto.cantidad|default:'' }}" 
+                                               step="0.01" 
+                                               required>
+                                    </td>
+                                    <td>
+                                        <input type="text" 
+                                               class="form-control form-control-sm" 
+                                               name="producto_precio_unitario_{{ forloop.parentloop.counter }}_{{ forloop.counter }}" 
+                                               value="{{ producto.precio_unitario|default:''|floatformat:2 }}" 
+                                               step="0.01">
+                                    </td>
+                                    <td>
+                                        <input type="text" 
+                                               class="form-control form-control-sm" 
+                                               name="producto_importe_bonificado_{{ forloop.parentloop.counter }}_{{ forloop.counter }}" 
+                                               value="{{ producto.importe_bonificado|default:''|floatformat:2 }}" 
+                                               step="0.01">
+                                    </td>
+                                    <td>
+                                        <input type="text" 
+                                               class="form-control form-control-sm" 
+                                               name="producto_subtotal_{{ forloop.parentloop.counter }}_{{ forloop.counter }}" 
+                                               value="{{ producto.subtotal|default:''|floatformat:2 }}" 
+                                               step="0.01">
+                                    </td>
+                                    <td>
+                                        <button type="button" 
+                                                class="btn btn-sm btn-danger eliminar-producto">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        <button type="button" 
+                                class="btn btn-sm btn-success agregar-producto" 
+                                data-factura="{{ forloop.counter }}">
+                            <i class="fas fa-plus"></i> Agregar Producto
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Totales -->
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="mb-3">
+                            <label for="subtotal_{{ forloop.counter }}" class="form-label">Subtotal</label>
+                            <input type="text" 
+                                   step="0.01" 
+                                   class="form-control" 
+                                   id="subtotal_{{ forloop.counter }}" 
+                                   name="subtotal_{{ forloop.counter }}" 
+                                   value="{% if factura.datos.subtotal %}{{ factura.datos.subtotal|floatformat:2 }}{% endif %}" 
+                                   required>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="mb-3">
+                            <label for="iva_{{ forloop.counter }}" class="form-label">IVA</label>
+                            <input type="text" 
+                                   step="0.01" 
+                                   class="form-control" 
+                                   id="iva_{{ forloop.counter }}" 
+                                   name="iva_{{ forloop.counter }}" 
+                                   value="{% if factura.datos.iva %}{{ factura.datos.iva|floatformat:2 }}{% endif %}" 
+                                   required>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="mb-3">
+                            <label for="percepcion_iibb_{{ forloop.counter }}" class="form-label">Percepción IIBB</label>
+                            <input type="text" 
+                                   step="0.01" 
+                                   class="form-control" 
+                                   id="percepcion_iibb_{{ forloop.counter }}" 
+                                   name="percepcion_iibb_{{ forloop.counter }}" 
+                                   value="{% if factura.datos.percepcion_iibb %}{{ factura.datos.percepcion_iibb|floatformat:2 }}{% endif %}" 
+                                   required>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="mb-3">
+                            <label for="otros_tributos_{{ forloop.counter }}" class="form-label">Otros Tributos</label>
+                            <input type="text" 
+                                   step="0.01" 
+                                   class="form-control" 
+                                   id="otros_tributos_{{ forloop.counter }}" 
+                                   name="otros_tributos_{{ forloop.counter }}" 
+                                   value="{% if factura.datos.otros_tributos %}{{ factura.datos.otros_tributos|floatformat:2 }}{% endif %}" 
+                                   required>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="mb-3">
+                            <label for="total_{{ forloop.counter }}" class="form-label">Total</label>
+                            <input type="text" 
+                                   step="0.01" 
+                                   class="form-control" 
+                                   id="total_{{ forloop.counter }}" 
+                                   name="total_{{ forloop.counter }}" 
+                                   value="{% if factura.datos.monto_total %}{{ factura.datos.monto_total|floatformat:2 }}{% endif %}" 
+                                   required>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Información de depuración -->
@@ -98,4 +294,85 @@
         </div>
     </form>
 </div>
-{% endblock %} 
+
+<!-- Script para manejar productos -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Agregar producto
+    document.querySelectorAll('.agregar-producto').forEach(button => {
+        button.addEventListener('click', function() {
+            const facturaIndex = this.getAttribute('data-factura');
+            const tbody = document.getElementById(`productos_${facturaIndex}`);
+            const newIndex = tbody.children.length + 1; // Índice basado en el número actual de filas
+
+            const newRow = document.createElement('tr');
+            newRow.innerHTML = `
+                <td>
+                    <input type="text"
+                           class="form-control form-control-sm"
+                           name="producto_descripcion_${facturaIndex}_${newIndex}"
+                           value=""
+                           required>
+                </td>
+                <td>
+                    <input type="text"
+                           class="form-control form-control-sm cantidad"
+                           name="producto_cantidad_${facturaIndex}_${newIndex}"
+                           value="1"
+                           step="0.01"
+                           required>
+                </td>
+                <td>
+                    <input type="text"
+                           class="form-control form-control-sm"
+                           name="producto_precio_unitario_${facturaIndex}_${newIndex}"
+                           value="0.00"
+                           step="0.01">
+                </td>
+                <td>
+                    <input type="text"
+                           class="form-control form-control-sm"
+                           name="producto_importe_bonificado_${facturaIndex}_${newIndex}"
+                           value="0.00"
+                           step="0.01">
+                </td>
+                <td>
+                    <input type="text"
+                           class="form-control form-control-sm"
+                           name="producto_subtotal_${facturaIndex}_${newIndex}"
+                           value="0.00"
+                           step="0.01">
+                </td>
+                <td>
+                    <button type="button"
+                            class="btn btn-sm btn-danger eliminar-producto">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+
+            tbody.appendChild(newRow);
+
+            // Agregar evento para eliminar al nuevo botón
+            newRow.querySelector('.eliminar-producto').addEventListener('click', function() {
+                newRow.remove();
+            });
+        });
+    });
+
+    // Eliminar producto existente (delegación de eventos o re-selección)
+    // Una forma más robusta para elementos agregados dinámicamente es usar delegación de eventos
+    document.getElementById('productos_{{ forloop.counter }}').addEventListener('click', function(event) {
+        if (event.target.classList.contains('eliminar-producto') || event.target.parentElement.classList.contains('eliminar-producto')) {
+             const button = event.target.classList.contains('eliminar-producto') ? event.target : event.target.parentElement;
+             const row = button.closest('tr');
+             if (row) {
+                 row.remove();
+             }
+        }
+    });
+
+});
+</script>
+
+{% endblock %}
