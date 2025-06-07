@@ -7,6 +7,8 @@ import os
 from datetime import datetime
 import uuid
 import tempfile
+import shutil
+from django.conf import settings
 
 # Create your views here.
 
@@ -22,31 +24,41 @@ def cargar_factura(request):
         imagenes = request.FILES.getlist('imagen')
         facturas_procesadas = []
         
-        # Usar el directorio temporal del sistema
-        temp_dir = tempfile.gettempdir()
+        # Crear directorio temporal en media si no existe
+        temp_dir = os.path.join(settings.MEDIA_ROOT, 'temp')
+        if not os.path.exists(temp_dir):
+            os.makedirs(temp_dir)
         
         for imagen in imagenes:
             try:
+                print(f"Procesando archivo: {imagen.name}")
+                
+                # Verificar el formato del archivo
+                extension = os.path.splitext(imagen.name)[1].lower()
+                if extension not in ['.png', '.jpg', '.jpeg', '.pdf']:
+                    raise ValueError(f"Formato de archivo no soportado: {extension}. Solo se permiten archivos PNG, JPG y PDF.")
+                
                 # Generar nombre único para el archivo
-                extension = os.path.splitext(imagen.name)[1]
                 nombre_archivo = f"{uuid.uuid4()}{extension}"
                 ruta_completa = os.path.join(temp_dir, nombre_archivo)
                 
-                # Guardar la imagen con manejo de permisos
+                # Guardar el archivo en el directorio temporal
                 try:
                     with open(ruta_completa, 'wb+') as destino:
                         for chunk in imagen.chunks():
                             destino.write(chunk)
-                except PermissionError:
-                    raise PermissionError(f"No hay permisos para escribir en el directorio temporal: {temp_dir}")
+                except Exception as e:
+                    raise ValueError(f"Error al guardar el archivo: {str(e)}")
                 
                 # Verificar que el archivo se guardó correctamente
                 if not os.path.exists(ruta_completa):
                     raise FileNotFoundError("No se pudo guardar el archivo")
                 
-                # Verificar permisos de lectura
-                if not os.access(ruta_completa, os.R_OK):
-                    raise PermissionError(f"No hay permisos de lectura para el archivo: {ruta_completa}")
+                # Verificar el tamaño del archivo
+                if os.path.getsize(ruta_completa) == 0:
+                    raise ValueError("El archivo está vacío")
+                
+                print(f"Archivo guardado en: {ruta_completa}")
                 
                 # Procesar la factura
                 datos = procesar_factura(ruta_completa)
@@ -55,20 +67,23 @@ def cargar_factura(request):
                 facturas_procesadas.append({
                     'datos': datos,
                     'imagen_url': f'/media/temp/{nombre_archivo}',
-                    'nombre_original': imagen.name
+                    'nombre_original': imagen.name,
+                    'ruta_temporal': ruta_completa
                 })
                 
             except Exception as e:
+                print(f"Error al procesar {imagen.name}: {str(e)}")
                 messages.error(request, f'Error al procesar {imagen.name}: {str(e)}')
-            finally:
-                # Limpiar archivo temporal
-                try:
-                    if os.path.exists(ruta_completa):
+                # Limpiar archivo temporal si existe
+                if 'ruta_completa' in locals() and os.path.exists(ruta_completa):
+                    try:
                         os.remove(ruta_completa)
-                except Exception as e:
-                    print(f"Error al eliminar archivo temporal: {str(e)}")
+                    except Exception as e:
+                        print(f"Error al eliminar archivo temporal: {str(e)}")
         
         if facturas_procesadas:
+            # Guardar las rutas temporales en la sesión para limpiar después
+            request.session['rutas_temporales'] = [f['ruta_temporal'] for f in facturas_procesadas]
             return render(request, 'gestion_facturas/confirmar_datos.html', {
                 'facturas': facturas_procesadas
             })
@@ -100,6 +115,19 @@ def confirmar_datos(request):
                     factura.imagen = imagenes[i]
                 
                 factura.save()
+            
+            # Limpiar archivos temporales
+            rutas_temporales = request.session.get('rutas_temporales', [])
+            for ruta in rutas_temporales:
+                try:
+                    if os.path.exists(ruta):
+                        os.remove(ruta)
+                except Exception as e:
+                    print(f"Error al eliminar archivo temporal: {str(e)}")
+            
+            # Limpiar la sesión
+            if 'rutas_temporales' in request.session:
+                del request.session['rutas_temporales']
             
             messages.success(request, 'Facturas guardadas exitosamente')
             return redirect('gestion_facturas:lista_facturas')

@@ -129,11 +129,11 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Directorios de medios y archivos estáticos
+# Configuración de medios
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
-# Directorio temporal para procesamiento de imágenes
-TEMP_DIR = os.path.join(BASE_DIR, 'temp')
-if not os.path.exists(TEMP_DIR):
-    os.makedirs(TEMP_DIR)
+# Asegurarse de que los directorios necesarios existan
+for directory in [MEDIA_ROOT, os.path.join(MEDIA_ROOT, 'temp'), os.path.join(MEDIA_ROOT, 'facturas')]:
+    if not os.path.exists(directory):
+        os.makedirs(directory)
