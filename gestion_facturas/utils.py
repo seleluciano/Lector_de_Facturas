@@ -300,49 +300,47 @@ def extraer_datos_factura(texto):
             r'PV\s*:\s*(\d{4})'
         ],
         'numero': [
-            r'Comp\.\s*Nro(?:\.|s)?:?\s*(\d{8})',
+            r'Nro(?:\.|s)?:?\s*(\d{8})',  # Más general para número, sin Comp.
             r'Comprobante\s*Nro(?:\.|s)?:?\s*(\d{8})',
-            r'Nro\.\s*(\d{8})'
+            r'(\d{8})' # Catch-all 8-digit number, might need context
         ],
         'fecha': [
-            r'(\d{2}/\d{2}/\d{4})',
-            r'(\d{2}-\d{2}-\d{4})',
+            r'(\d{2}[/\-]\d{2}[/\-]\d{4})', # Admite / o -
             r'(\d{2}\.\d{2}\.\d{4})'
         ],
         'cuit_cliente': [
-            r'CUIT\s*Cliente:\s*(\d{2}-\d{8}-\d{1})',
-            r'CUIT\s*del\s*Cliente:\s*(\d{2}-\d{8}-\d{1})',
-            r'CUIT\s*Comprador:\s*(\d{2}-\d{8}-\d{1})',
-            r'CUIT\s*:\s*(\d{2}-\d{8}-\d{1})' # Agregar patrón CUIT general por si no dice Cliente/Comprador
+            r'CUIT\s*(?:Cliente|del\s*Cliente|Comprador)?:?\s*(\d{2}[-\s]?\d{8}[-\s]?\d{1})', # Más flexible con espacios/guiones y etiquetas
+            r'CUIT\s*:\s*(\d{2}[-\s]?\d{8}[-\s]?\d{1})'
         ],
         'monto_total': [
             rf'Importe\s*Total:\s*\$?\s*{patron_valor_numerico}',
             rf'Total:\s*\$?\s*{patron_valor_numerico}',
+            rf'Total\s*Factura:\s*\$?\s*{patron_valor_numerico}'
         ],
         'subtotal': [
             rf'Subtotal:\s*\$?\s*{patron_valor_numerico}',
             rf'Neto\s*Gravado:\s*\$?\s*{patron_valor_numerico}'
         ],
         'iva': [
-            rf'IVA\s*(?:\d+%?)?:\s*\$?\s*{patron_valor_numerico}', # Made percentage optional and non-capturing
+            rf'IVA\s*(?:\d+%?)?:\s*\$?\s*{patron_valor_numerico}',
             rf'IVA:\s*\$?\s*{patron_valor_numerico}',
             rf'Impuesto\s*IVA:\s*\$?\s*{patron_valor_numerico}',
-            rf'I\.V\.A\. ?:?\s*\$?\s*{patron_valor_numerico}' # Añadir patrón 'I.V.A.' con o sin ':'
+            rf'I\.V\.A\. ?:?\s*\$?\s*{patron_valor_numerico}'
         ],
         'percepcion_iibb': [
             rf'Percepci[oó]n\s*IIBB:\s*\$?\s*{patron_valor_numerico}',
             rf'IIBB:\s*\$?\s*{patron_valor_numerico}',
-            rf'IIBB\s*(?:\d+%?)?:\s*\$?\s*{patron_valor_numerico}' # Made percentage optional and non-capturing
+            rf'IIBB\s*(?:\d+%?)?:\s*\$?\s*{patron_valor_numerico}'
         ],
         'otros_tributos': [
             rf'Otros\s*Tributos:\s*\$?\s*{patron_valor_numerico}',
             rf'Otros\s*Impuestos:\s*\$?\s*{patron_valor_numerico}',
-            rf'Otros:\s*\$?\s*{patron_valor_numerico}', # Patrón más genérico por si solo dice "Otros" antes del valor
+            rf'Otros:\s*\$?\s*{patron_valor_numerico}',
+            rf'Total\s*Otros\s*Tributos:\s*\$?\s*{patron_valor_numerico}'
         ],
         'condicion_venta': [
-            r'Condici[oó]n\s*de\s*Venta:\s*([^\n]+)',
-            r'Forma\s*de\s*Pago:\s*([^\n]+)',
-            r'Condici[oó]n\s*Venta:\s*([^\n]+)' # Added this for "Condicion Venta: Contado"
+            r'Condici[oó]n\s*(?:de\s*)?Venta:\s*([^\n]+)',
+            r'Forma\s*de\s*Pago:\s*([^\n]+)'
         ],
         'condicion_iva': [
             r'Condici[oó]n\s*IVA:\s*([^\n]+)',
@@ -353,7 +351,7 @@ def extraer_datos_factura(texto):
             r'Copia\s*(Original|Duplicado)'
         ],
         'razon_social_cliente': [
-            r'(?:Raz[oó]n\s*Social|Cliente|Denominaci[oó]n|Nombre\s*o\s*Raz[oó]n\s*Social):\s*([^\n]+)'
+            r'(?:Raz[oó]n\s*Social|Cliente|Denominaci[oó]n|Nombre\s*o\s*Raz[oó]n\s*Social)[.:\s]*([^\n]+)'
         ]
     }
 
@@ -369,22 +367,10 @@ def extraer_datos_factura(texto):
                 elif campo == 'numero':
                      datos['numero'] = match.group(1)
                 elif campo in ['iva', 'percepcion_iibb', 'monto_total', 'subtotal', 'otros_tributos']:
-                    # Para los campos monetarios, el valor numérico está en el último grupo capturado por patron_valor_numerico
-                    # Este siempre es el último grupo del match, ya que patron_valor_numerico tiene un solo grupo capturante.
                     valor_str = match.group(len(match.groups()))
-                    
-                    # Limpiar el string numérico para convertir a float:
-                    # 1. Eliminar separadores de miles (puntos o comas seguidos de 3 dígitos al final de un grupo de miles)
-                    #    o simplemente eliminar todos los puntos y comas excepto el último si hay decimales.
-                    # Una forma más segura es eliminar todos los caracteres que no sean dígitos, excepto si es un punto
-                    # inmediatamente seguido por dígitos (posible decimal).
-                    
-                    # Eliminar todos los caracteres que no sean dígitos o punto/coma
                     valor_limpio = re.sub(r'[^\\d.,]', '', valor_str)
                     
-                    # Reemplazar la última coma o punto por un punto (asumiendo que es el separador decimal)
                     if ',' in valor_limpio and '.' in valor_limpio:
-                        # Si hay ambos, asumimos que el último es el decimal
                         if valor_limpio.rfind('.') > valor_limpio.rfind(','):
                             valor_limpio = valor_limpio.replace(',', '')
                         else:
@@ -392,14 +378,12 @@ def extraer_datos_factura(texto):
                             valor_limpio = valor_limpio.replace(',', '.')
                     elif ',' in valor_limpio:
                          valor_limpio = valor_limpio.replace(',', '.')
-                    # Si solo hay puntos, asumimos que el último es el decimal y los demás son de miles (eliminados implícitamente)
-                    # Si no hay puntos ni comas, ya está bien.
 
                     try:
                         datos[campo] = float(valor_limpio)
                     except ValueError:
                          print(f"Advertencia: No se pudo convertir a float el valor extraído para {campo}: {valor_str} (limpiado a {valor_limpio})") # Debug
-                         datos[campo] = None # Si falla la conversión, dejar como None
+                         datos[campo] = 0 # Asignar 0 si falla la conversión
 
                 elif campo == 'cuit_cliente':
                      datos['cuit'] = match.group(1)
@@ -408,17 +392,12 @@ def extraer_datos_factura(texto):
                      datos['razon_social_cliente'] = match.group(1).strip()
 
                 else:
-                    # Para la mayoría de los campos, el primer grupo es el valor deseado
                     datos[campo] = match.group(1)
 
-                # Si encontramos una coincidencia para este campo, pasamos al siguiente campo principal
-                # Esto asegura que el primer patrón que coincida para un campo dado sea el que se use
                 break
 
-    # Detectar tipo de factura (la función detectar_tipo_factura ya maneja esto)
     datos['tipo_factura'] = detectar_tipo_factura(texto)
 
-    # Extraer productos (la función extraer_productos ya maneja esto y evita los totales)
     productos = extraer_productos(texto)
     if productos:
         datos['productos'] = productos
@@ -443,22 +422,7 @@ def extraer_productos(texto):
     patron_porcentaje = r'(\d+%?)'
 
     # Palabras clave a ignorar en las líneas de productos (totales, encabezados, etc.)
-    palabras_ignorar_productos = [
-        'Código', 'Producto / Servicio', 'U. Medida', 'Precio Unit.', '% Bonf.', 'Imp. Bonf.', 'Subtotal',
-        'Subtotal:', 'Importe Total:', 'Total:','Neto Gravado', # Palabras clave de totales
-        'TOTAL NETO', 'TOTAL IVA', 'TOTAL PERCEPCIONES', 'TOTAL OTROS TRIBUTOS', # Añadir más palabras de totales
-        'TOTAL FACTURA', 'IMPORTE TOTAL', 'CANTIDAD' # Añadir 'CANTIDAD' para ignorar encabezados
-    ]
-
-    # Patrón para encontrar líneas de productos con Cantidad, Descripción, Precio Unitario, Bonificación y Subtotal:
-    # ^\s*(\d+)?\s* - Inicio de línea con un número de código opcional (ej. "1 ") y espacios
-    # {patron_cantidad}\s* - Cantidad (grupo 1)
-    # (.+?)\s* - Descripción (grupo 2), no codiciosa
-    # (\S+)?\s* - Unidad de Medida opcional (grupo 3), una o más palabras no espaciadas
-    # \$?\s*{patron_valor_numerico}\s* - Precio Unitario (grupo 4), opcional $, número flexible
-    # {patron_porcentaje}?\s* - Porcentaje de Bonificación opcional (grupo 5)
-    # \$?\s*{patron_valor_numerico}?\s* - Importe Bonificado opcional (grupo 6), opcional $, número flexible
-    # \$?\s*{patron_valor_numerico}\s*$ - Subtotal de línea (grupo 7), opcional $, número flexible
+    palabras_ignorar_productos = [] # Se eliminan todas las palabras ignoradas
 
     # Nota: Usamos r'...' para evitar problemas con backslashes en regex.
     patron_linea_producto = re.compile(
@@ -536,21 +500,21 @@ def detectar_tipo_factura(texto):
     # Patrones para identificar el tipo de factura
     patrones = {
         'A': [
-            r'factura\s*[\\s\\W]*A', # Matches 'factura A', 'factura   A', 'factura (A)' etc.
-            r'tipo\s*[\\s\\W]*A',
-            r'comprobante\s*[\\s\\W]*A',
+            r'factura(?:\s+|\s*[\\s\\W]*)\bA\b', # Matches 'factura A', 'factura   A', 'factura (A)' etc.
+            r'tipo(?:\s+|\s*[\\s\\W]*)\bA\b',
+            r'comprobante(?:\s+|\s*[\\s\\W]*)\bA\b',
             r'iva\s*responsable\s*inscripto'
         ],
         'B': [
-            r'factura\s*[\\s\\W]*B',
-            r'tipo\s*[\\s\\W]*B',
-            r'comprobante\s*[\\s\\W]*B',
+            r'factura(?:\s+|\s*[\\s\\W]*)\bB\b',
+            r'tipo(?:\s+|\s*[\\s\\W]*)\bB\b',
+            r'comprobante(?:\s+|\s*[\\s\\W]*)\bB\b',
             r'iva\s*responsable\s*no\s*inscripto'
         ],
         'C': [
-            r'factura\s*[\\s\\W]*C',
-            r'tipo\s*[\\s\\W]*C',
-            r'comprobante\s*[\\s\\W]*C',
+            r'factura(?:\s+|\s*[\\s\\W]*)\bC\b',
+            r'tipo(?:\s+|\s*[\\s\\W]*)\bC\b',
+            r'comprobante(?:\s+|\s*[\\s\\W]*)\bC\b',
             r'iva\s*exento'
         ]
     }
