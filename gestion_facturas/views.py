@@ -74,8 +74,14 @@ def cargar_factura(request):
         except Exception as e:
             print(f"Error en cargar_factura: {str(e)}")
             messages.error(request, f'Error al procesar la imagen: {str(e)}')
+            # Limpiar la sesión en caso de error antes de redirigir
+            if 'facturas_procesadas' in request.session:
+                del request.session['facturas_procesadas']
             return redirect('gestion_facturas:cargar_factura')
 
+    # Si es un método GET (carga inicial o redirección después de procesar/cancelar), limpiar la sesión
+    if 'facturas_procesadas' in request.session:
+        del request.session['facturas_procesadas']
     return render(request, 'gestion_facturas/cargar_factura.html')
 
 def confirmar_datos(request):
@@ -117,8 +123,14 @@ def confirmar_datos(request):
             return redirect('gestion_facturas:lista_facturas')
         except Exception as e:
             messages.error(request, f'Error al guardar las facturas: {str(e)}')
+            # Limpiar la sesión en caso de error antes de redirigir
+            if 'facturas_procesadas' in request.session:
+                del request.session['facturas_procesadas']
             return redirect('gestion_facturas:cargar_factura')
     
+    # Limpiar la sesión si se accede directamente por GET (ej. al cancelar del front-end)
+    if 'facturas_procesadas' in request.session:
+        del request.session['facturas_procesadas']
     return redirect('gestion_facturas:cargar_factura')
 
 def lista_facturas(request):
@@ -246,6 +258,12 @@ def guardar_factura(request):
         except Exception as e:
             print(f"Error en guardar_factura: {str(e)}")
             messages.error(request, f'Error al guardar las facturas: {str(e)}')
+            # Limpiar la sesión en caso de error antes de redirigir
+            if 'facturas_procesadas' in request.session:
+                del request.session['facturas_procesadas']
             return redirect('gestion_facturas:cargar_factura')
     
+    # Si es un método GET (acceso directo sin POST), limpiar la sesión
+    if 'facturas_procesadas' in request.session:
+        del request.session['facturas_procesadas']
     return redirect('gestion_facturas:cargar_factura')

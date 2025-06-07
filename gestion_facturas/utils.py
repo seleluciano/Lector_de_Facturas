@@ -36,55 +36,213 @@ def configurar_tesseract():
 if not configurar_tesseract():
     print("ADVERTENCIA: Tesseract OCR no está instalado o no se encuentra en la ruta especificada.")
     print("Por favor, instale Tesseract OCR desde: https://github.com/UB-Mannheim/tesseract/wiki")
-    print("Asegúrese de que esté instalado en: C:\\Program Files\\Tesseract-OCR")
+    print("Y asegúrese de que esté instalado en: C:\\Program Files\\Tesseract-OCR")
+
+def detectar_esquinas(imagen):
+    """
+    Detecta las esquinas de la factura usando detección de bordes y contornos
+    """
+    # Convertir a escala de grises
+    gris = cv2.cvtColor(imagen, cv2.COLOR_BGR2GRAY)
+    
+    # Aplicar desenfoque gaussiano para reducir ruido
+    blur = cv2.GaussianBlur(gris, (5, 5), 0)
+    
+    # Detectar bordes usando Canny
+    bordes = cv2.Canny(blur, 75, 200)
+    
+    # Dilatar los bordes para conectar líneas discontinuas
+    kernel = np.ones((5,5), np.uint8)
+    bordes = cv2.dilate(bordes, kernel, iterations=1)
+    
+    # Encontrar contornos
+    contornos, _ = cv2.findContours(bordes, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    # Encontrar el contorno más grande (asumiendo que es la factura)
+    if not contornos:
+        return None
+    
+    contorno_factura = max(contornos, key=cv2.contourArea)
+    
+    # Aproximar el contorno a un polígono
+    epsilon = 0.02 * cv2.arcLength(contorno_factura, True)
+    aprox = cv2.approxPolyDP(contorno_factura, epsilon, True)
+    
+    # Si encontramos 4 puntos, asumimos que es la factura
+    if len(aprox) == 4:
+        return aprox.reshape(4, 2)
+    
+    return None
+
+def ordenar_puntos(puntos):
+    """
+    Ordena los puntos en el orden: [top-left, top-right, bottom-right, bottom-left]
+    """
+    rect = np.zeros((4, 2), dtype=np.float32)
+    
+    # Suma de coordenadas
+    s = puntos.sum(axis=1)
+    rect[0] = puntos[np.argmin(s)]  # Top-left
+    rect[2] = puntos[np.argmax(s)]  # Bottom-right
+    
+    # Diferencia de coordenadas
+    diff = np.diff(puntos, axis=1)
+    rect[1] = puntos[np.argmin(diff)]  # Top-right
+    rect[3] = puntos[np.argmax(diff)]  # Bottom-left
+    
+    return rect
+
+def corregir_perspectiva(imagen, puntos):
+    """
+    Corrige la perspectiva de la imagen usando los puntos detectados
+    """
+    # Ordenar puntos
+    rect = ordenar_puntos(puntos)
+    
+    # Calcular dimensiones del nuevo rectángulo
+    width = max(
+        np.linalg.norm(rect[0] - rect[1]),
+        np.linalg.norm(rect[2] - rect[3])
+    )
+    height = max(
+        np.linalg.norm(rect[0] - rect[3]),
+        np.linalg.norm(rect[1] - rect[2])
+    )
+    
+    # Puntos de destino
+    dst = np.array([
+        [0, 0],
+        [width - 1, 0],
+        [width - 1, height - 1],
+        [0, height - 1]
+    ], dtype=np.float32)
+    
+    # Calcular matriz de transformación
+    M = cv2.getPerspectiveTransform(rect, dst)
+    
+    # Aplicar transformación
+    corregida = cv2.warpPerspective(imagen, M, (int(width), int(height)))
+    
+    return corregida
+
+def mejorar_contraste(imagen):
+    """
+    Mejora el contraste de la imagen usando CLAHE y ajuste de brillo
+    """
+    # Convertir a escala de grises
+    gris = cv2.cvtColor(imagen, cv2.COLOR_BGR2GRAY)
+    
+    # Aplicar CLAHE
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+    contraste = clahe.apply(gris)
+    
+    # Ajustar brillo
+    alpha = 1.2  # Contraste
+    beta = 10    # Brillo
+    ajustada = cv2.convertScaleAbs(contraste, alpha=alpha, beta=beta)
+    
+    return ajustada
 
 def preprocesar_imagen(imagen):
     """
-    Preprocesa la imagen para mejorar la extracción de texto
+    Preprocesa la imagen para mejorar la extracción de texto, similar a CamScanner
     """
     try:
         print(f"Dimensiones de la imagen: {imagen.shape}")
-
+        
         # Convertir a escala de grises
         gris = cv2.cvtColor(imagen, cv2.COLOR_BGR2GRAY)
         print("Imagen convertida a escala de grises")
-
+        
+        # Detectar bordes
+        bordes = cv2.Canny(gris, 75, 200)
+        print("Bordes detectados")
+        
+        # Dilatar los bordes para conectar líneas discontinuas
+        kernel = np.ones((5,5), np.uint8)
+        bordes = cv2.dilate(bordes, kernel, iterations=1)
+        
+        # Encontrar contornos
+        contornos, _ = cv2.findContours(bordes, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        # Encontrar el contorno más grande (asumiendo que es la factura)
+        if contornos:
+            contorno_factura = max(contornos, key=cv2.contourArea)
+            
+            # Aproximar el contorno a un polígono
+            epsilon = 0.02 * cv2.arcLength(contorno_factura, True)
+            aprox = cv2.approxPolyDP(contorno_factura, epsilon, True)
+            
+            # Si encontramos 4 puntos, corregir la perspectiva
+            if len(aprox) == 4:
+                puntos = aprox.reshape(4, 2)
+                
+                # Ordenar puntos
+                rect = np.zeros((4, 2), dtype=np.float32)
+                s = puntos.sum(axis=1)
+                rect[0] = puntos[np.argmin(s)]  # Top-left
+                rect[2] = puntos[np.argmax(s)]  # Bottom-right
+                diff = np.diff(puntos, axis=1)
+                rect[1] = puntos[np.argmin(diff)]  # Top-right
+                rect[3] = puntos[np.argmax(diff)]  # Bottom-left
+                
+                # Calcular dimensiones
+                width = max(
+                    np.linalg.norm(rect[0] - rect[1]),
+                    np.linalg.norm(rect[2] - rect[3])
+                )
+                height = max(
+                    np.linalg.norm(rect[0] - rect[3]),
+                    np.linalg.norm(rect[1] - rect[2])
+                )
+                
+                # Puntos de destino
+                dst = np.array([
+                    [0, 0],
+                    [width - 1, 0],
+                    [width - 1, height - 1],
+                    [0, height - 1]
+                ], dtype=np.float32)
+                
+                # Transformar perspectiva
+                M = cv2.getPerspectiveTransform(rect, dst)
+                imagen = cv2.warpPerspective(imagen, M, (int(width), int(height)))
+                print("Perspectiva corregida")
+        
+        # Mejorar contraste usando CLAHE
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+        contraste = clahe.apply(gris)
+        print("Contraste mejorado")
+        
+        # Ajustar brillo y contraste
+        alpha = 1.2  # Contraste
+        beta = 10    # Brillo
+        ajustada = cv2.convertScaleAbs(contraste, alpha=alpha, beta=beta)
+        print("Brillo y contraste ajustados")
+        
+        # Reducir ruido
+        denoised = cv2.fastNlMeansDenoising(ajustada, None, 10, 7, 21)
+        print("Ruido reducido")
+        
         # Aplicar umbral adaptativo
         umbral = cv2.adaptiveThreshold(
-            gris, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+            denoised, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
             cv2.THRESH_BINARY, 11, 2
         )
         print("Umbral adaptativo aplicado")
-
-        # Reducir ruido
-        denoised = cv2.fastNlMeansDenoising(umbral)
-        print("Ruido reducido")
-
-        # Aumentar el contraste
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-        contraste = clahe.apply(gris)
-        print("Contraste aumentado")
-
-        # Combinar resultados
-        resultado = cv2.bitwise_and(denoised, contraste)
-        print("Resultados combinados")
-
+        
         # Escalar la imagen si es muy pequeña
-        height, width = resultado.shape
+        height, width = umbral.shape
         if width < 1000:
             scale = 1000 / width
-            resultado = cv2.resize(resultado, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
-            print(f"Imagen escalada a {resultado.shape}")
-
-        # Asegurarse de que la imagen sea del tipo correcto
-        if resultado.dtype != np.uint8:
-            print("Convirtiendo resultado final a uint8")
-            resultado = (resultado * 255).astype(np.uint8)
-
-        print(f"Tipo final de la imagen: {resultado.dtype}")
-        print(f"Forma final de la imagen: {resultado.shape}")
+            umbral = cv2.resize(umbral, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+            print(f"Imagen escalada a {umbral.shape}")
         
-        return resultado
+        print(f"Tipo final de la imagen: {umbral.dtype}")
+        print(f"Forma final de la imagen: {umbral.shape}")
+        
+        return umbral
+        
     except Exception as e:
         print(f"Error detallado en preprocesamiento: {str(e)}")
         raise ValueError(f"Error en el preprocesamiento de la imagen: {str(e)}")
@@ -115,17 +273,17 @@ def extraer_datos_factura(texto):
     Extrae los datos relevantes de la factura del texto
     """
     datos = {
-        'numero': None,
-        'punto_venta': None,
+        'numero': 0,
+        'punto_venta': 0,
         'fecha': None,
         'cuit': None,
-        'monto_total': None,
         'tipo_factura': None,
         'condicion_venta': None,
         'condicion_iva': None,
-        'subtotal': None,
-        'iva': None,
-        'percepcion_iibb': None,
+        'subtotal': 0,
+        'iva': 0,
+        'percepcion_iibb': 0,
+        'monto_total': 0,
         'tipo_copia': None,
         'razon_social_cliente': None,
         'productos': []
@@ -137,10 +295,14 @@ def extraer_datos_factura(texto):
 
     # Patrones para buscar información
     patrones = {
-        'numero_completo': [
-            r'[A-Z]\s*(\d{4})-(\d{8})',  # Formato: A 0001-12345678
-            r'[A-Z]\s*(\d{4})\s*-\s*(\d{8})',
-            r'[A-Z]\s*(\d{4})[^\d]*(\d{8})'
+        'punto_venta': [
+            r'Punto\s*de\s*Venta(?:\s*|\s*:\s*)(\d{4})',
+            r'PV\s*:\s*(\d{4})'
+        ],
+        'numero': [
+            r'Comp\.\s*Nro(?:\.|s)?:?\s*(\d{8})',
+            r'Comprobante\s*Nro(?:\.|s)?:?\s*(\d{8})',
+            r'Nro\.\s*(\d{8})'
         ],
         'fecha': [
             r'(\d{2}/\d{2}/\d{4})',
@@ -162,15 +324,15 @@ def extraer_datos_factura(texto):
             rf'Neto\s*Gravado:\s*\$?\s*{patron_valor_numerico}'
         ],
         'iva': [
-            rf'IVA\s*(?:\d+%?):\s*\$?\s*{patron_valor_numerico}', # Priorizar patrón con porcentaje
+            rf'IVA\s*(?:\d+%?)?:\s*\$?\s*{patron_valor_numerico}', # Made percentage optional and non-capturing
             rf'IVA:\s*\$?\s*{patron_valor_numerico}',
-            rf'Impuesto\s*IVA:\s*\$?\s*{patron_valor_numerico}', # Añadir patrón 'Impuesto IVA:'
+            rf'Impuesto\s*IVA:\s*\$?\s*{patron_valor_numerico}',
             rf'I\.V\.A\. ?:?\s*\$?\s*{patron_valor_numerico}' # Añadir patrón 'I.V.A.' con o sin ':'
         ],
         'percepcion_iibb': [
-            rf'Percepción\s*IIBB:\s*\$?\s*{patron_valor_numerico}',
+            rf'Percepci[oó]n\s*IIBB:\s*\$?\s*{patron_valor_numerico}',
             rf'IIBB:\s*\$?\s*{patron_valor_numerico}',
-            rf'IIBB\s*(?:\d+%?):\s*\$?\s*{patron_valor_numerico}' # Hacer el grupo de porcentaje no capturante
+            rf'IIBB\s*(?:\d+%?)?:\s*\$?\s*{patron_valor_numerico}' # Made percentage optional and non-capturing
         ],
         'otros_tributos': [
             rf'Otros\s*Tributos:\s*\$?\s*{patron_valor_numerico}',
@@ -178,22 +340,20 @@ def extraer_datos_factura(texto):
             rf'Otros:\s*\$?\s*{patron_valor_numerico}', # Patrón más genérico por si solo dice "Otros" antes del valor
         ],
         'condicion_venta': [
-            r'Condición\s*de\s*Venta:\s*([^\n]+)',
-            r'Forma\s*de\s*Pago:\s*([^\n]+)'
+            r'Condici[oó]n\s*de\s*Venta:\s*([^\n]+)',
+            r'Forma\s*de\s*Pago:\s*([^\n]+)',
+            r'Condici[oó]n\s*Venta:\s*([^\n]+)' # Added this for "Condicion Venta: Contado"
         ],
         'condicion_iva': [
-            r'Condición\s*IVA:\s*([^\n]+)',
-            r'Condición\s*frente\s*al\s*IVA:\s*([^\n]+)'
+            r'Condici[oó]n\s*IVA:\s*([^\n]+)',
+            r'Condici[oó]n\s*frente\s*al\s*IVA:\s*([^\n]+)'
         ],
         'tipo_copia': [
             r'(Original|Duplicado)',
             r'Copia\s*(Original|Duplicado)'
         ],
         'razon_social_cliente': [
-            r'Razón\s*Social:\s*([^\n]+)', # Patrón para "Razón Social: [Nombre]"
-            r'Cliente:\s*([^\n]+)', # Patrón para "Cliente: [Nombre]"
-            r'Nombre\s*o\s*Razón\s*Social:\s*([^\n]+)', # Patrón para "Nombre o Razón Social: [Nombre]"
-            r'Denominación:\s*([^\n]+)' # Patrón para "Denominación: [Nombre]"
+            r'(?:Raz[oó]n\s*Social|Cliente|Denominaci[oó]n|Nombre\s*o\s*Raz[oó]n\s*Social):\s*([^\n]+)'
         ]
     }
 
@@ -204,15 +364,11 @@ def extraer_datos_factura(texto):
             match = re.search(patron, texto, re.IGNORECASE)
             if match:
                 # Lógica específica para campos con grupos múltiples o nombres diferentes
-                if campo == 'numero_completo':
-                    if len(match.groups()) >= 2:
-                         datos['punto_venta'] = match.group(1)
-                         datos['numero'] = match.group(2)
-                    else:
-                         print(f"Advertencia: Patrón de número completo ('{patron}') no extrajo dos grupos en el texto.") # Debug
-                         pass # Continuar al siguiente patrón si este no capturó ambos
-
-                elif campo in ['iva', 'percepcion_iibb', 'monto_total', 'subtotal']:
+                if campo == 'punto_venta':
+                     datos['punto_venta'] = match.group(1)
+                elif campo == 'numero':
+                     datos['numero'] = match.group(1)
+                elif campo in ['iva', 'percepcion_iibb', 'monto_total', 'subtotal', 'otros_tributos']:
                     # Para los campos monetarios, el valor numérico está en el último grupo capturado por patron_valor_numerico
                     # Este siempre es el último grupo del match, ya que patron_valor_numerico tiene un solo grupo capturante.
                     valor_str = match.group(len(match.groups()))
@@ -224,7 +380,7 @@ def extraer_datos_factura(texto):
                     # inmediatamente seguido por dígitos (posible decimal).
                     
                     # Eliminar todos los caracteres que no sean dígitos o punto/coma
-                    valor_limpio = re.sub(r'[^\d.,]', '', valor_str)
+                    valor_limpio = re.sub(r'[^\\d.,]', '', valor_str)
                     
                     # Reemplazar la última coma o punto por un punto (asumiendo que es el separador decimal)
                     if ',' in valor_limpio and '.' in valor_limpio:
@@ -283,32 +439,37 @@ def extraer_productos(texto):
     # así que cuando lo usemos dentro de otro patrón, el grupo capturado será el de este patrón.
     patron_valor_numerico = r'(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?)'
 
+    # Patrón para porcentajes (ej. 19%, 7%)
+    patron_porcentaje = r'(\d+%?)'
+
     # Palabras clave a ignorar en las líneas de productos (totales, encabezados, etc.)
     palabras_ignorar_productos = [
-        'Código Producto / Servicio', 'U. Medida',
+        'Código', 'Producto / Servicio', 'U. Medida', 'Precio Unit.', '% Bonf.', 'Imp. Bonf.', 'Subtotal',
         'Subtotal:', 'Importe Total:', 'Total:','Neto Gravado', # Palabras clave de totales
-        # Mantenemos palabras clave específicas de productos si queremos ignorar algunas líneas,
-        # pero eliminamos las que corresponden a los campos que queremos extraer.
         'TOTAL NETO', 'TOTAL IVA', 'TOTAL PERCEPCIONES', 'TOTAL OTROS TRIBUTOS', # Añadir más palabras de totales
-        'TOTAL FACTURA', 'IMPORTE TOTAL'
+        'TOTAL FACTURA', 'IMPORTE TOTAL', 'CANTIDAD' # Añadir 'CANTIDAD' para ignorar encabezados
     ]
 
     # Patrón para encontrar líneas de productos con Cantidad, Descripción, Precio Unitario, Bonificación y Subtotal:
-    # ^\s* - Inicio de línea con opcionales espacios
-    # (\d+[.,]?\d*) - Cantidad (captura usando patron_cantidad)
-    # \s+ - Uno o más espacios
-    # (.+?) - Descripción (captura cualquier cosa de forma no codiciosa)
-    # \s+ - Uno o más espacios
-    # \$?\s*(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?) - Precio Unitario (opcional $, número flexible, captura)
-    # \s+ - Uno o más espacios
-    # \$?\s*(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?) - Importe Bonificado (opcional $, número flexible, captura)
-    # \s+ - Uno o más espacios
-    # \$?\s*(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?) - Subtotal de línea (opcional $, número flexible, captura)
-    # \s*$ - Opcionales espacios hasta el fin de línea
+    # ^\s*(\d+)?\s* - Inicio de línea con un número de código opcional (ej. "1 ") y espacios
+    # {patron_cantidad}\s* - Cantidad (grupo 1)
+    # (.+?)\s* - Descripción (grupo 2), no codiciosa
+    # (\S+)?\s* - Unidad de Medida opcional (grupo 3), una o más palabras no espaciadas
+    # \$?\s*{patron_valor_numerico}\s* - Precio Unitario (grupo 4), opcional $, número flexible
+    # {patron_porcentaje}?\s* - Porcentaje de Bonificación opcional (grupo 5)
+    # \$?\s*{patron_valor_numerico}?\s* - Importe Bonificado opcional (grupo 6), opcional $, número flexible
+    # \$?\s*{patron_valor_numerico}\s*$ - Subtotal de línea (grupo 7), opcional $, número flexible
+
     # Nota: Usamos r'...' para evitar problemas con backslashes en regex.
-    # Asegurarse de que el número de grupos capturados coincida con el acceso posterior (group(1) a group(5)).
     patron_linea_producto = re.compile(
-        rf'^\s*{patron_cantidad}\s+(.+?)\s+\$?\s*{patron_valor_numerico}\s+\$?\s*{patron_valor_numerico}\s+\$?\s*{patron_valor_numerico}\s*$',
+        rf'^\s*(?:\d+)?\s*'  # Optional leading number (e.g., product code/line number)
+        rf'{patron_cantidad}\s*'  # Group 1: Cantidad
+        rf'(.+?)\s*'  # Group 2: Descripción (non-greedy to allow for spaces)
+        rf'(\S+)?\s*'  # Group 3: U. Medida (optional, non-whitespace chars)
+        rf'\$?\s*{patron_valor_numerico}\s*'  # Group 4: Precio Unitario
+        rf'{patron_porcentaje}?\s*'  # Group 5: % Bonf. (optional)
+        rf'\$?\s*{patron_valor_numerico}?\s*'  # Group 6: Imp. Bonf. (optional)
+        rf'\$?\s*{patron_valor_numerico}\s*$',  # Group 7: Subtotal
         re.IGNORECASE
     )
 
@@ -325,30 +486,30 @@ def extraer_productos(texto):
         match = patron_linea_producto.search(linea_limpia) # Buscar en la línea limpia
         if match:
             try:
-                # Acceder a los grupos capturados:
-                # Grupo 1: Cantidad (del patron_cantidad)
-                # Grupo 2: Descripción
-                # Grupo 3: Precio Unitario (del primer patron_valor_numerico)
-                # Grupo 4: Importe Bonificado (del segundo patron_valor_numerico)
-                # Grupo 5: Subtotal (del tercer patron_valor_numerico)
-
-                cantidad_str = match.group(1) # Grupo 1: Cantidad
-                descripcion = match.group(2).strip() # Grupo 2: Descripción
-                precio_unitario_str = match.group(3) # Grupo 3: Precio Unitario
-                importe_bonificado_str = match.group(4) # Grupo 4: Importe Bonificado
-                subtotal_str = match.group(5) # Grupo 5: Subtotal
+                # Acceder a los grupos capturados (ajustados para el nuevo patrón):
+                cantidad_str = match.group(1)
+                descripcion = match.group(2).strip()
+                unidad_medida = match.group(3).strip() if match.group(3) else '' # Nuevo campo
+                precio_unitario_str = match.group(4)
+                bonf_porcentaje_str = match.group(5) # Nuevo campo
+                importe_bonificado_str = match.group(6)
+                subtotal_str = match.group(7)
 
                 # Limpiar y convertir a float. Usar 0.0 si el string está vacío después de limpiar.
                 cantidad = float(cantidad_str.replace(',', '.')) if cantidad_str else 0.0
-                # Usamos la misma lógica de limpieza para los valores monetarios que en extraer_datos_factura
-                precio_unitario = float(re.sub(r'[^\d.,]', '', precio_unitario_str).replace(',', '.')) if precio_unitario_str else 0.0
-                importe_bonificado = float(re.sub(r'[^\d.,]', '', importe_bonificado_str).replace(',', '.')) if importe_bonificado_str else 0.0
-                subtotal = float(re.sub(r'[^\d.,]', '', subtotal_str).replace(',', '.')) if subtotal_str else 0.0
+                precio_unitario = float(re.sub(r'[^\\d.,]', '', precio_unitario_str).replace(',', '.')) if precio_unitario_str else 0.0
+                importe_bonificado = float(re.sub(r'[^\\d.,]', '', importe_bonificado_str).replace(',', '.')) if importe_bonificado_str else 0.0
+                subtotal = float(re.sub(r'[^\\d.,]', '', subtotal_str).replace(',', '.')) if subtotal_str else 0.0
+                
+                # Convertir porcentaje, eliminando el '%' si existe
+                bonificacion_porcentaje = float(bonf_porcentaje_str.replace('%', '').replace(',', '.')) if bonf_porcentaje_str else 0.0
 
                 productos.append({
                     'cantidad': cantidad,
                     'descripcion': descripcion,
+                    'unidad_medida': unidad_medida, # Añadido
                     'precio_unitario': precio_unitario,
+                    'porcentaje_bonificacion': bonificacion_porcentaje, # Añadido
                     'importe_bonificado': importe_bonificado,
                     'subtotal': subtotal,
                 })
@@ -375,22 +536,22 @@ def detectar_tipo_factura(texto):
     # Patrones para identificar el tipo de factura
     patrones = {
         'A': [
-            r'factura\s+a',
-            r'tipo\s+a',
-            r'comprobante\s+a',
-            r'iva\s+responsable\s+inscripto'
+            r'factura\s*[\\s\\W]*A', # Matches 'factura A', 'factura   A', 'factura (A)' etc.
+            r'tipo\s*[\\s\\W]*A',
+            r'comprobante\s*[\\s\\W]*A',
+            r'iva\s*responsable\s*inscripto'
         ],
         'B': [
-            r'factura\s+b',
-            r'tipo\s+b',
-            r'comprobante\s+b',
-            r'iva\s+responsable\s+no\s+inscripto'
+            r'factura\s*[\\s\\W]*B',
+            r'tipo\s*[\\s\\W]*B',
+            r'comprobante\s*[\\s\\W]*B',
+            r'iva\s*responsable\s*no\s*inscripto'
         ],
         'C': [
-            r'factura\s+c',
-            r'tipo\s+c',
-            r'comprobante\s+c',
-            r'iva\s+exento'
+            r'factura\s*[\\s\\W]*C',
+            r'tipo\s*[\\s\\W]*C',
+            r'comprobante\s*[\\s\\W]*C',
+            r'iva\s*exento'
         ]
     }
 
