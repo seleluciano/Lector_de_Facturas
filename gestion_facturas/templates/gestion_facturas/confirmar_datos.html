@@ -7,16 +7,24 @@
         {% csrf_token %}
         {% for factura in facturas %}
         <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Factura {{ forloop.counter }}</h5>
+            </div>
             <div class="card-body">
-                <h5 class="card-title">Factura {{ forloop.counter }}</h5>
-                
-                <!-- Vista previa de la imagen original -->
-                <div class="mb-3">
-                    <h6>Vista previa de la factura:</h6>
-                    <img src="data:image/png;base64,{{ factura.imagen_original_base64 }}" 
-                         class="img-fluid" 
-                         alt="Vista previa de la factura" 
-                         style="max-height: 400px;">
+                <!-- Imagen de la factura -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <h6>Imagen Original</h6>
+                        <img src="data:image/png;base64,{{ factura.imagen_original_base64 }}" 
+                             class="img-fluid" 
+                             alt="Factura {{ forloop.counter }}">
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Texto Extraído</h6>
+                        <div class="border p-3 bg-light" style="max-height: 400px; overflow-y: auto;">
+                            <pre style="white-space: pre-wrap; word-wrap: break-word;">{{ factura.texto_extraido }}</pre>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Campos de datos -->
@@ -87,15 +95,27 @@
                 <div class="row">
                     <div class="col-md-6">
                         <div class="mb-3">
-                            <label for="cuit_{{ forloop.counter }}" class="form-label">CUIT/CUIL/DNI</label>
-                            <input type="text"
-                                   class="form-control"
-                                   id="cuit_{{ forloop.counter }}"
-                                   name="cuit_{{ forloop.counter }}"
-                                   value="{{ factura.datos.cuit|default:'' }}"
-                                   required>
+                            <label for="cuit_{{ forloop.counter }}" class="form-label">CUIT/CUIL/DNI Cliente</label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="cuit_{{ forloop.counter }}" 
+                                   name="cuit_{{ forloop.counter }}" 
+                                   value="{{ factura.datos.cuit|default:'' }}">
                         </div>
                     </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="cuit_emisor_{{ forloop.counter }}" class="form-label">CUIT/CUIL Emisor</label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="cuit_emisor_{{ forloop.counter }}" 
+                                   name="cuit_emisor_{{ forloop.counter }}" 
+                                   value="{{ factura.datos.cuit_emisor|default:'' }}">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
                     <div class="col-md-6">
                         <div class="mb-3">
                             <label for="razon_social_cliente_{{ forloop.counter }}" class="form-label">Razón Social Cliente</label>
@@ -104,6 +124,16 @@
                                    id="razon_social_cliente_{{ forloop.counter }}"
                                    name="razon_social_cliente_{{ forloop.counter }}"
                                    value="{{ factura.datos.razon_social_cliente|default:'' }}">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="razon_social_emisor_{{ forloop.counter }}" class="form-label">Razón Social Emisor</label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="razon_social_emisor_{{ forloop.counter }}" 
+                                   name="razon_social_emisor_{{ forloop.counter }}" 
+                                   value="{{ factura.datos.razon_social_emisor|default:'' }}">
                         </div>
                     </div>
                 </div>

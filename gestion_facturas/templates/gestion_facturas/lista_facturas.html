@@ -21,8 +21,10 @@
                     <th>Tipo</th>
                     <th>Número</th>
                     <th>Fecha</th>
-                    <th>CUIT/CUIL/DNI</th>
+                    <th>CUIT Cliente</th>
                     <th>Razón Social Cliente</th>
+                    <th>CUIT Emisor</th>
+                    <th>Razón Social Emisor</th>
                     <th>Cond. IVA</th>
                     <th>Cond. Venta</th>
                     <th>Subtotal</th>
@@ -38,8 +40,10 @@
                     <td>{{ factura.get_tipo_factura_display }}</td>
                     <td>{{ factura.punto_venta }}-{{ factura.numero }}</td>
                     <td>{{ factura.fecha_emision|date:"d/m/Y" }}</td>
-                    <td>{{ factura.cuit }}</td>
-                    <td>{{ factura.razon_social_cliente|default:'' }}</td>
+                    <td>{{ factura.cuit|default:"-" }}</td>
+                    <td>{{ factura.razon_social_cliente|default:"-" }}</td>
+                    <td>{{ factura.cuit_emisor|default:"-" }}</td>
+                    <td>{{ factura.razon_social_emisor|default:"-" }}</td>
                     <td>{{ factura.get_condicion_iva_display }}</td>
                     <td>{{ factura.get_condicion_venta_display }}</td>
                     <td>${{ factura.subtotal }}</td>

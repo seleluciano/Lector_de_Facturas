@@ -33,6 +33,8 @@ class Factura(models.Model):
     punto_venta = models.CharField(max_length=5)
     fecha_emision = models.DateField(default=timezone.now)
     cuit = models.CharField(max_length=13, blank=True, null=True)
+    cuit_emisor = models.CharField(max_length=13, blank=True, null=True)
+    razon_social_emisor = models.CharField(max_length=200, blank=True, null=True)
     monto_total = models.DecimalField(max_digits=10, decimal_places=2)
     imagen = models.ImageField(upload_to='facturas/')
     tipo_factura = models.CharField(

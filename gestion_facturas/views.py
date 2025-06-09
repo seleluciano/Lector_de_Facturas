@@ -1,7 +1,7 @@
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from .models import Factura, ProductoFactura
-from .utils import procesar_factura, preprocesar_imagen
+from .utils import procesar_factura, preprocesar_imagen, extraer_texto
 from django.core.files.storage import FileSystemStorage
 import os
 from datetime import datetime
@@ -47,13 +47,13 @@ def cargar_factura(request):
             datos = procesar_factura(imagen_cv)
             print("Datos extraídos:", datos)  # Debug
 
-            # La fecha ya viene en formato dd/mm/aaaa del OCR, la pasamos directamente como string
-            # No necesitamos parsearla a date object aquí para mostrarla en el input text
-            # Si la extracción no encontró fecha, datos['fecha'] será None, lo cual es correcto.
+            # Extraer el texto directamente de la imagen procesada
+            texto = extraer_texto(preprocesar_imagen(imagen_cv))
 
             # Crear diccionario con los datos de la factura procesada
             factura_procesada = {
                 'imagen_original_base64': imagen_original_base64,
+                'texto_extraido': texto,
                 'datos': datos
             }
             print("Factura procesada:", factura_procesada)  # Debug
@@ -159,8 +159,10 @@ def guardar_factura(request):
                 nueva_factura = Factura(
                     numero=request.POST.get(f'numero_{i+1}'),
                     punto_venta=request.POST.get(f'punto_venta_{i+1}'),
-                    fecha_emision=fecha, # Usar el objeto date
+                    fecha_emision=fecha,
                     cuit=request.POST.get(f'cuit_{i+1}'),
+                    cuit_emisor=request.POST.get(f'cuit_emisor_{i+1}'),
+                    razon_social_emisor=request.POST.get(f'razon_social_emisor_{i+1}'),
                     monto_total=request.POST.get(f'total_{i+1}'),
                     tipo_factura=request.POST.get(f'tipo_factura_{i+1}'),
                     condicion_venta=request.POST.get(f'condicion_venta_{i+1}'),

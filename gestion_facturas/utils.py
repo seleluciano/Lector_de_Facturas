@@ -277,6 +277,8 @@ def extraer_datos_factura(texto):
         'punto_venta': 0,
         'fecha': None,
         'cuit': None,
+        'cuit_emisor': None,
+        'razon_social_emisor': None,
         'tipo_factura': None,
         'condicion_venta': None,
         'condicion_iva': None,
@@ -290,7 +292,6 @@ def extraer_datos_factura(texto):
     }
 
     # Patrón flexible para números monetarios (con o sin separador de miles, con coma o punto decimal)
-    # Captura el número completo en el grupo 1
     patron_valor_numerico = r'(\d{1,3}(?:\.\d{3})*(?:,\d+)?)'
 
     # Patrones para buscar información
@@ -309,7 +310,22 @@ def extraer_datos_factura(texto):
             r'(\d{2}\.\d{2}\.\d{4})'
         ],
         'cuit_cliente': [
-            r'(?:CUIT|CUIL|DNI)\s*[.:\s]*(\d{2}[-\s]?\d{8}[-\s]?\d{1})'
+            r'(?:CUIT|CUIL|DNI)\s*[.:\s]*(\d{2}[-\s]?\d{8}[-\s]?\d{1})',
+            r'DNI:\s*(\d{2}[-\s]?\d{8}[-\s]?\d{1})'
+        ],
+        'cuit_emisor': [
+            r'(?:CUIT|CUIL)\s*(?:Emisor|Vendedor|Empresa)[.:\s]*(\d{2}[-\s]?\d{8}[-\s]?\d{1})',
+            r'(?:CUIT|CUIL)\s*[.:\s]*(\d{2}[-\s]?\d{8}[-\s]?\d{1})',
+            r'CUIT:\s*(\d{2}[-\s]?\d{8}[-\s]?\d{1})',
+            r'Domicilio\s*Comercial:[^\n]*CUIT:\s*(\d{2}[-\s]?\d{8}[-\s]?\d{1})'  # Patrón específico para el formato de la factura
+        ],
+        'razon_social_emisor': [
+            r'(?:Raz[oó]n\s*Social|Denominaci[oó]n|Empresa|Vendedor)\s*(?:Emisor|Vendedor|Empresa)[.:\s]*([^\n]+?)(?:\s*Fecha|$)',  # Se detiene en "Fecha" o fin de línea
+            r'(?:Raz[oó]n\s*Social|Denominaci[oó]n|Empresa|Vendedor)[.:\s]*([^\n]+?)(?:\s*Fecha|$)',  # Se detiene en "Fecha" o fin de línea
+            r'Raz[oó]n\s*Soclal:\s*([^\n]+?)(?:\s*Fecha|$)',  # Se detiene en "Fecha" o fin de línea
+            r'Emisor[.:\s]*([^\n]+?)(?:\s*Fecha|$)',  # Se detiene en "Fecha" o fin de línea
+            r'Vendedor[.:\s]*([^\n]+?)(?:\s*Fecha|$)',  # Se detiene en "Fecha" o fin de línea
+            r'Empresa[.:\s]*([^\n]+?)(?:\s*Fecha|$)'  # Se detiene en "Fecha" o fin de línea
         ],
         'monto_total': [
             rf'Importe\s*Total:\s*\$?\s*{patron_valor_numerico}',
@@ -332,35 +348,41 @@ def extraer_datos_factura(texto):
             rf'Impuesto\s*IVA:\s*\$?\s*{patron_valor_numerico}',
             rf'I\.V\.A\. ?:?\s*\$?\s*{patron_valor_numerico}',
             rf'IVA\s*Discriminado:\s*\$?\s*{patron_valor_numerico}',
-            rf'IVA\s*Inscripto:\s*\$?\s*{patron_valor_numerico}'
+            rf'IVA\s*Inscripto:\s*\$?\s*{patron_valor_numerico}',
+            rf'NA:\s*\$?\s*{patron_valor_numerico}'  # Para el caso específico de "NA: $7.639,80"
         ],
         'percepcion_iibb': [
             rf'Percepci[oó]n\s*IIBB:\s*\$?\s*{patron_valor_numerico}',
             rf'IIBB:\s*\$?\s*{patron_valor_numerico}',
             rf'IIBB\s*(?:\d+%?)?:\s*\$?\s*{patron_valor_numerico}',
             rf'Percepci[oó]n\s*Ingresos\s*Brutos:\s*\$?\s*{patron_valor_numerico}',
-            rf'Percepci[oó]n\s*IB:\s*\$?\s*{patron_valor_numerico}'
+            rf'Percepci[oó]n\s*IB:\s*\$?\s*{patron_valor_numerico}',
+            rf'Percepci[oó]n\s*!IBB:\s*\$?\s*{patron_valor_numerico}'  # Para el caso específico de "Percepción !IBB"
         ],
         'otros_tributos': [
             rf'Otros\s*Tributos:\s*\$?\s*{patron_valor_numerico}',
             rf'Otros\s*Impuestos:\s*\$?\s*{patron_valor_numerico}',
             rf'Otros:\s*\$?\s*{patron_valor_numerico}',
-            rf'Total\s*Otros\s*Tributos:\s*\$?\s*{patron_valor_numerico}'
+            rf'Total\s*Otros\s*Tributos:\s*\$?\s*{patron_valor_numerico}',
+            rf'Importe\s*Otros\s*Tributos:\s*\$?\s*{patron_valor_numerico}'
         ],
         'condicion_venta': [
             r'Condici[oó]n\s*(?:de\s*)?Venta:\s*([^\n]+)',
-            r'Forma\s*de\s*Pago:\s*([^\n]+)'
+            r'Forma\s*de\s*Pago:\s*([^\n]+)',
+            r'Congici[oó]n\s*de\s*venta:\s*([^\n]+)'  # Para el caso específico de "Congición de venta"
         ],
         'condicion_iva': [
             r'Condici[oó]n\s*IVA:\s*([^\n]+)',
-            r'Condici[oó]n\s*frente\s*al\s*IVA:\s*([^\n]+)'
+            r'Condici[oó]n\s*frente\s*al\s*IVA:\s*([^\n]+)',
+            r'Condici[oó]n\s*frente\s*al\s*A:\s*([^\n]+)'  # Para el caso específico de "Condición frente al A"
         ],
         'tipo_copia': [
             r'(Original|Duplicado)',
             r'Copia\s*(Original|Duplicado)'
         ],
         'razon_social_cliente': [
-            r'(?:Raz[oó]n\s*Social|Cliente|Denominaci[oó]n|Nombre\s*o\s*Raz[oó]n\s*Social)[.:\s]*([^\n]+)'
+            r'(?:Raz[oó]n\s*Social|Cliente|Denominaci[oó]n|Nombre\s*o\s*Raz[oó]n\s*Social)[.:\s]*([^\n]+)',
+            r'Apellido\s*y\s*Nombra\s*/\s*Raz[oó]n\s*Soclal:\s*([^\n]+)'  # Para el caso específico de "Apellido y Nombra / Razón Soclal"
         ]
     }
 
@@ -374,6 +396,12 @@ def extraer_datos_factura(texto):
                 if len(matches) >= 2:
                     # Tomar el segundo CUIT encontrado (asumiendo que el primero es el de la empresa)
                     datos['cuit'] = matches[1].group(1)
+                break
+            elif campo == 'cuit_emisor':
+                # Buscar el CUIT del emisor
+                matches = list(re.finditer(patron, texto, re.IGNORECASE))
+                if matches:
+                    datos['cuit_emisor'] = matches[0].group(1)
                 break
             else:
                 match = re.search(patron, texto, re.IGNORECASE)
@@ -537,7 +565,9 @@ def detectar_tipo_factura(texto):
             r'factura(?:\s+|\s*[\\s\\W]*)\bA\b', # Matches 'factura A', 'factura   A', 'factura (A)' etc.
             r'tipo(?:\s+|\s*[\\s\\W]*)\bA\b',
             r'comprobante(?:\s+|\s*[\\s\\W]*)\bA\b',
-            r'iva\s*responsable\s*inscripto'
+            r'iva\s*responsable\s*inscripto',
+            r'^A\s*\|',  # Para el caso específico de "A | FACTURA"
+            r'^A\s*\|.*FACTURA'  # Para el caso específico de "A | FACTURA"
         ],
         'B': [
             r'factura(?:\s+|\s*[\\s\\W]*)\bB\b',
@@ -594,10 +624,10 @@ def procesar_factura(imagen):
         
         # Extraer datos
         datos = extraer_datos_factura(texto)
-         
+        
         # Detectar tipo de factura
         tipo = detectar_tipo_factura(texto)
-        datos['tipo_factura'] = tipo # Asegurarse de usar 'tipo_factura' según el modelo
+        datos['tipo_factura'] = tipo
         
         return datos
         
