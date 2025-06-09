@@ -1,5 +1,12 @@
 from django.db import models
 from django.utils import timezone
+import os
+
+def factura_imagen_path(instance, filename):
+    # Generar un nombre único para la imagen
+    ext = filename.split('.')[-1]
+    nombre_archivo = f"factura_{instance.punto_venta}_{instance.numero}.{ext}"
+    return os.path.join('facturas', nombre_archivo)
 
 class Factura(models.Model):
     CONDICION_VENTA = [
@@ -36,7 +43,7 @@ class Factura(models.Model):
     cuit_emisor = models.CharField(max_length=13, blank=True, null=True)
     razon_social_emisor = models.CharField(max_length=200, blank=True, null=True)
     monto_total = models.DecimalField(max_digits=10, decimal_places=2)
-    imagen = models.ImageField(upload_to='facturas/')
+    imagen = models.ImageField(upload_to=factura_imagen_path, null=True, blank=True)
     tipo_factura = models.CharField(
         max_length=1,
         choices=TIPO_FACTURA,
