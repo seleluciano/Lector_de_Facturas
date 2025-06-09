@@ -2,3 +2,4 @@ venv
 env
 entorno_virtual
 migrations
+db.sqlite3
