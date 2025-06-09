@@ -1,5 +1,21 @@
-venv
-env
-entorno_virtual
-migrations
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Django
+*.log
 db.sqlite3
+db.sqlite3-journal
+
+# Environment
+venv/
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# Media files
+media/
+temp/
