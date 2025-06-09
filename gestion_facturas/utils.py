@@ -23,20 +23,15 @@ def configurar_tesseract():
             tessdata_dir = os.path.join(ruta_base, 'tessdata')
             if os.path.exists(tessdata_dir):
                 os.environ['TESSDATA_PREFIX'] = tessdata_dir
-                print(f"Tesseract configurado en: {ruta_exe}")
-                print(f"TESSDATA_PREFIX configurado en: {tessdata_dir}")
                 return True
         except Exception as e:
-            print(f"Error al configurar Tesseract: {str(e)}")
+            pass
     
-    print("No se pudo encontrar Tesseract en la ruta especificada")
     return False
 
 # Intentar configurar Tesseract al importar el módulo
 if not configurar_tesseract():
-    print("ADVERTENCIA: Tesseract OCR no está instalado o no se encuentra en la ruta especificada.")
-    print("Por favor, instale Tesseract OCR desde: https://github.com/UB-Mannheim/tesseract/wiki")
-    print("Y asegúrese de que esté instalado en: C:\\Program Files\\Tesseract-OCR")
+    pass
 
 def detectar_esquinas(imagen):
     """
@@ -148,45 +143,27 @@ def preprocesar_imagen(imagen):
     Preprocesa la imagen para mejorar la extracción de texto, similar a CamScanner
     """
     try:
-        print(f"Dimensiones de la imagen: {imagen.shape}")
-        
-        # Convertir a escala de grises
         gris = cv2.cvtColor(imagen, cv2.COLOR_BGR2GRAY)
-        print("Imagen convertida a escala de grises")
-        
-        # Detectar bordes
         bordes = cv2.Canny(gris, 75, 200)
-        print("Bordes detectados")
-        
-        # Dilatar los bordes para conectar líneas discontinuas
         kernel = np.ones((5,5), np.uint8)
         bordes = cv2.dilate(bordes, kernel, iterations=1)
-        
-        # Encontrar contornos
         contornos, _ = cv2.findContours(bordes, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
-        # Encontrar el contorno más grande (asumiendo que es la factura)
         if contornos:
             contorno_factura = max(contornos, key=cv2.contourArea)
-            
-            # Aproximar el contorno a un polígono
             epsilon = 0.02 * cv2.arcLength(contorno_factura, True)
             aprox = cv2.approxPolyDP(contorno_factura, epsilon, True)
             
-            # Si encontramos 4 puntos, corregir la perspectiva
             if len(aprox) == 4:
                 puntos = aprox.reshape(4, 2)
-                
-                # Ordenar puntos
                 rect = np.zeros((4, 2), dtype=np.float32)
                 s = puntos.sum(axis=1)
-                rect[0] = puntos[np.argmin(s)]  # Top-left
-                rect[2] = puntos[np.argmax(s)]  # Bottom-right
+                rect[0] = puntos[np.argmin(s)]
+                rect[2] = puntos[np.argmax(s)]
                 diff = np.diff(puntos, axis=1)
-                rect[1] = puntos[np.argmin(diff)]  # Top-right
-                rect[3] = puntos[np.argmax(diff)]  # Bottom-left
+                rect[1] = puntos[np.argmin(diff)]
+                rect[3] = puntos[np.argmax(diff)]
                 
-                # Calcular dimensiones
                 width = max(
                     np.linalg.norm(rect[0] - rect[1]),
                     np.linalg.norm(rect[2] - rect[3])
@@ -196,7 +173,6 @@ def preprocesar_imagen(imagen):
                     np.linalg.norm(rect[1] - rect[2])
                 )
                 
-                # Puntos de destino
                 dst = np.array([
                     [0, 0],
                     [width - 1, 0],
@@ -204,47 +180,28 @@ def preprocesar_imagen(imagen):
                     [0, height - 1]
                 ], dtype=np.float32)
                 
-                # Transformar perspectiva
                 M = cv2.getPerspectiveTransform(rect, dst)
                 imagen = cv2.warpPerspective(imagen, M, (int(width), int(height)))
-                print("Perspectiva corregida")
         
-        # Mejorar contraste usando CLAHE
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
         contraste = clahe.apply(gris)
-        print("Contraste mejorado")
-        
-        # Ajustar brillo y contraste
-        alpha = 1.2  # Contraste
-        beta = 10    # Brillo
+        alpha = 1.2
+        beta = 10
         ajustada = cv2.convertScaleAbs(contraste, alpha=alpha, beta=beta)
-        print("Brillo y contraste ajustados")
-        
-        # Reducir ruido
         denoised = cv2.fastNlMeansDenoising(ajustada, None, 10, 7, 21)
-        print("Ruido reducido")
-        
-        # Aplicar umbral adaptativo
         umbral = cv2.adaptiveThreshold(
             denoised, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
             cv2.THRESH_BINARY, 11, 2
         )
-        print("Umbral adaptativo aplicado")
         
-        # Escalar la imagen si es muy pequeña
         height, width = umbral.shape
         if width < 1000:
             scale = 1000 / width
             umbral = cv2.resize(umbral, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
-            print(f"Imagen escalada a {umbral.shape}")
-        
-        print(f"Tipo final de la imagen: {umbral.dtype}")
-        print(f"Forma final de la imagen: {umbral.shape}")
         
         return umbral
         
     except Exception as e:
-        print(f"Error detallado en preprocesamiento: {str(e)}")
         raise ValueError(f"Error en el preprocesamiento de la imagen: {str(e)}")
 
 def extraer_texto(imagen):
@@ -263,9 +220,12 @@ def extraer_texto(imagen):
             
         # Realizar OCR
         texto = pytesseract.image_to_string(imagen_pil, lang='spa')
+        
+        # Eliminar el mensaje de depuración al final
+        texto = texto.replace('¡ata Agtocla no ae responsabiliza pos los datos lngroxados en el datalo de lu opsercton', '')
+        
         return texto.strip()
     except Exception as e:
-        print(f"Error en extraer_texto: {str(e)}")
         raise
 
 def extraer_datos_factura(texto):
@@ -445,7 +405,6 @@ def extraer_datos_factura(texto):
     if productos:
         datos['productos'] = productos
 
-    print("Datos extraídos:", datos)  # Debug
     return datos
 
 def extraer_productos(texto):
@@ -541,17 +500,9 @@ def extraer_productos(texto):
                     'importe_bonificado': importe_bonificado,
                     'subtotal': subtotal,
                 })
-                print(f"Producto extraído: {productos[-1]}") # Debug
 
-            except ValueError as e:
-                print(f"Advertencia: No se pudo parsear los valores numéricos en la línea de producto \'{linea_limpia}\': {e}") # Debug
-                continue # Saltar si hay error de parseo
-            except IndexError as e:
-                 print(f"Advertencia: Patrón de producto no encontró todos los grupos esperados en la línea \'{linea_limpia}\': {e}. Grupos encontrados: {match.groups()}") # Debug
-                 continue # Saltar si el patrón no coincide completamente con la estructura esperada
-            except Exception as e:
-                 print(f"Advertencia: Error inesperado al procesar línea de producto \'{linea_limpia}\': {e}") # Debug
-                 continue
+            except (ValueError, IndexError, Exception):
+                continue
 
     return productos
 

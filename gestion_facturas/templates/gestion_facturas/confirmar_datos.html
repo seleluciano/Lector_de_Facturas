@@ -12,21 +12,15 @@
             </div>
             <div class="card-body">
                 <!-- Imagen de la factura -->
-                <div class="row mb-4">
-                    <div class="col-md-6">
+                <div class="row mb-4 justify-content-center">
+                    <div class="col-md-6 text-center">
                         <h6>Imagen Original</h6>
                         <img src="data:image/png;base64,{{ factura.imagen_original_base64 }}" 
                              class="img-fluid" 
+                             style="max-width: 80%;"
                              alt="Factura {{ forloop.counter }}">
                     </div>
-                    <div class="col-md-6">
-                        <h6>Texto Extraído</h6>
-                        <div class="border p-3 bg-light" style="max-height: 400px; overflow-y: auto;">
-                            <pre style="white-space: pre-wrap; word-wrap: break-word;">{{ factura.texto_extraido }}</pre>
-                        </div>
-                    </div>
                 </div>
-
                 <!-- Campos de datos -->
                 <div class="row">
                     <div class="col-md-4">
@@ -306,14 +300,6 @@
                         </div>
                     </div>
                 </div>
-
-                <!-- Información de depuración -->
-                {% if debug %}
-                <div class="alert alert-info mt-3">
-                    <h6>Datos extraídos:</h6>
-                    <pre>{{ factura.datos|pprint }}</pre>
-                </div>
-                {% endif %}
             </div>
         </div>
         {% endfor %}
@@ -333,7 +319,7 @@ document.addEventListener('DOMContentLoaded', function() {
         button.addEventListener('click', function() {
             const facturaIndex = this.getAttribute('data-factura');
             const tbody = document.getElementById(`productos_${facturaIndex}`);
-            const newIndex = tbody.children.length + 1; // Índice basado en el número actual de filas
+            const newIndex = tbody.children.length + 1;
 
             const newRow = document.createElement('tr');
             newRow.innerHTML = `
@@ -383,15 +369,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
             tbody.appendChild(newRow);
 
-            // Agregar evento para eliminar al nuevo botón
             newRow.querySelector('.eliminar-producto').addEventListener('click', function() {
                 newRow.remove();
             });
         });
     });
 
-    // Eliminar producto existente (delegación de eventos o re-selección)
-    // Una forma más robusta para elementos agregados dinámicamente es usar delegación de eventos
     document.getElementById('productos_{{ forloop.counter }}').addEventListener('click', function(event) {
         if (event.target.classList.contains('eliminar-producto') || event.target.parentElement.classList.contains('eliminar-producto')) {
              const button = event.target.classList.contains('eliminar-producto') ? event.target : event.target.parentElement;
@@ -401,8 +384,6 @@ document.addEventListener('DOMContentLoaded', function() {
              }
         }
     });
-
 });
 </script>
-
 {% endblock %}
