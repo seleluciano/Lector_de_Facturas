@@ -302,7 +302,7 @@ def extraer_datos_factura(texto):
         ],
         'numero': [
             r'Nro(?:\.|s)?:?\s*(\d{8})',
-            r'Comprobante\s*Nro(?:\.|s)?:?\s*(\d{8})',
+            r'Comp(?:\.|s)?\s*Nro(?:\.|s)?:?\s*(\d{8})',
             r'(\d{8})'
         ],
         'fecha': [
@@ -314,10 +314,12 @@ def extraer_datos_factura(texto):
             r'DNI:\s*(\d{2}[-\s]?\d{8}[-\s]?\d{1})'
         ],
         'cuit_emisor': [
+            r'Domicilio\s*Comercial:[^\n]*CUIT:\s*(\d{2}[-\s]?\d{8}[-\s]?\d{1})',  # Patrón específico para el formato de la factura
+            r'CUIT:\s*(\d{2}[-\s]?\d{8}[-\s]?\d{1})',  # Patrón general para CUIT
             r'(?:CUIT|CUIL)\s*(?:Emisor|Vendedor|Empresa)[.:\s]*(\d{2}[-\s]?\d{8}[-\s]?\d{1})',
             r'(?:CUIT|CUIL)\s*[.:\s]*(\d{2}[-\s]?\d{8}[-\s]?\d{1})',
-            r'CUIT:\s*(\d{2}[-\s]?\d{8}[-\s]?\d{1})',
-            r'Domicilio\s*Comercial:[^\n]*CUIT:\s*(\d{2}[-\s]?\d{8}[-\s]?\d{1})'  # Patrón específico para el formato de la factura
+            r'Raz[oó]n\s*Social[^\n]*CUIT:\s*(\d{2}[-\s]?\d{8}[-\s]?\d{1})',  # Patrón para cuando el CUIT está después de la razón social
+            r'Global\s*Networks[^\n]*CUIT:\s*(\d{2}[-\s]?\d{8}[-\s]?\d{1})'  # Patrón específico para esta factura
         ],
         'razon_social_emisor': [
             r'(?:Raz[oó]n\s*Social|Denominaci[oó]n|Empresa|Vendedor)\s*(?:Emisor|Vendedor|Empresa)[.:\s]*([^\n]+?)(?:\s*Fecha|$)',  # Se detiene en "Fecha" o fin de línea
@@ -557,6 +559,20 @@ def detectar_tipo_factura(texto):
     """
     Detecta el tipo de factura basado en el texto extraído
     """
+    # Buscar en las primeras líneas del texto
+    lineas = texto.split('\n')
+    for i in range(min(3, len(lineas))):  # Buscar en las primeras 3 líneas
+        linea = lineas[i].strip()
+        
+        # Patrones específicos para el tipo de factura
+        if re.search(r'^A\s*\|', linea, re.IGNORECASE) or re.search(r'^A\s*\|.*FACTURA', linea, re.IGNORECASE):
+            return 'A'
+        if re.search(r'^B\s*\|', linea, re.IGNORECASE) or re.search(r'^B\s*\|.*FACTURA', linea, re.IGNORECASE):
+            return 'B'
+        if re.search(r'^C\s*\|', linea, re.IGNORECASE) or re.search(r'^C\s*\|.*FACTURA', linea, re.IGNORECASE):
+            return 'C'
+    
+    # Si no se encuentra en las primeras líneas, buscamos en todo el texto
     texto = texto.lower()
 
     # Patrones para identificar el tipo de factura
