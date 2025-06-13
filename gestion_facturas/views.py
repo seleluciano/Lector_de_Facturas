@@ -27,7 +27,7 @@ def cargar_factura(request):
             # Obtener la imagen del request
             imagen = request.FILES.get('imagen')
             if not imagen:
-                messages.error(request, 'No se proporcionó ninguna imagen')
+                messages.error(request, 'Por favor, seleccione al menos una imagen de factura para procesar')
                 return redirect('gestion_facturas:cargar_factura')
 
             # Leer la imagen directamente
@@ -36,7 +36,7 @@ def cargar_factura(request):
             imagen_cv = cv2.imdecode(imagen_array, cv2.IMREAD_COLOR)
             
             if imagen_cv is None:
-                messages.error(request, 'No se pudo leer la imagen')
+                messages.error(request, 'No se pudo procesar la imagen. Por favor, asegúrese de que el archivo sea una imagen válida')
                 return redirect('gestion_facturas:cargar_factura')
 
             # Convertir la imagen original a base64 para mostrarla
@@ -62,7 +62,7 @@ def cargar_factura(request):
             facturas_procesadas = request.session.get('facturas_procesadas', [])
             facturas_procesadas.append(factura_procesada)
             request.session['facturas_procesadas'] = facturas_procesadas
-            print("Facturas procesadas:", facturas_procesadas)  # Debug
+            print("Facturas procesadas:", facturas_procesadas)
 
             # Renderizar la plantilla con los datos
             print("Datos que se pasan a la plantilla (facturas_procesadas):", facturas_procesadas) # Debug adicional
@@ -73,7 +73,7 @@ def cargar_factura(request):
 
         except Exception as e:
             print(f"Error en cargar_factura: {str(e)}")
-            messages.error(request, f'Error al procesar la imagen: {str(e)}')
+            messages.error(request, 'Hubo un problema al procesar la factura. Por favor, intente nuevamente o contacte al soporte técnico')
             # Limpiar la sesión en caso de error antes de redirigir
             if 'facturas_procesadas' in request.session:
                 del request.session['facturas_procesadas']
@@ -119,10 +119,10 @@ def confirmar_datos(request):
             if 'rutas_temporales' in request.session:
                 del request.session['rutas_temporales']
             
-            messages.success(request, 'Facturas guardadas exitosamente')
+            messages.success(request, '¡Las facturas se han guardado correctamente!')
             return redirect('gestion_facturas:lista_facturas')
         except Exception as e:
-            messages.error(request, f'Error al guardar las facturas: {str(e)}')
+            messages.error(request, 'No se pudieron guardar las facturas. Por favor, verifique los datos e intente nuevamente')
             # Limpiar la sesión en caso de error antes de redirigir
             if 'facturas_procesadas' in request.session:
                 del request.session['facturas_procesadas']
@@ -143,7 +143,7 @@ def guardar_factura(request):
             # Obtener datos de la sesión
             facturas = request.session.get('facturas_procesadas', [])
             if not facturas:
-                messages.error(request, 'No hay facturas para guardar')
+                messages.error(request, 'No hay facturas para guardar. Por favor, cargue al menos una factura')
                 return redirect('gestion_facturas:confirmar_datos')
             
             for i, factura in enumerate(facturas):
@@ -167,13 +167,13 @@ def guardar_factura(request):
                     try:
                         fecha = datetime.strptime(fecha_str, '%d/%m/%Y').date()
                     except ValueError:
-                        messages.error(request, f'Formato de fecha inválido: {fecha_str}. Use DD/MM/YYYY')
+                        messages.error(request, f'El formato de la fecha "{fecha_str}" no es válido. Por favor, use el formato DD/MM/YYYY')
                         return redirect('gestion_facturas:confirmar_datos')
 
                 # Obtener la imagen de la sesión
                 imagen_data = factura.get('imagen_original_base64')
                 if not imagen_data:
-                    messages.error(request, 'No se encontró la imagen de la factura')
+                    messages.error(request, 'No se encontró la imagen de la factura. Por favor, intente cargar la factura nuevamente')
                     return redirect('gestion_facturas:confirmar_datos')
 
                 # Convertir la imagen base64 a archivo
@@ -183,7 +183,7 @@ def guardar_factura(request):
                     temp_file.write(imagen_bytes)
                     temp_file.close()
                 except Exception as e:
-                    messages.error(request, f'Error al procesar la imagen: {str(e)}')
+                    messages.error(request, 'No se pudo procesar la imagen de la factura. Por favor, intente nuevamente')
                     return redirect('gestion_facturas:confirmar_datos')
 
                 # Crear nueva factura
@@ -229,7 +229,7 @@ def guardar_factura(request):
                         nuevo_producto.save()
 
                 except Exception as e:
-                    messages.error(request, f'Error al guardar la factura: {str(e)}')
+                    messages.error(request, 'No se pudo guardar la factura. Por favor, verifique los datos e intente nuevamente')
                     if os.path.exists(temp_file.name):
                         os.unlink(temp_file.name)
                     return redirect('gestion_facturas:confirmar_datos')
@@ -238,11 +238,11 @@ def guardar_factura(request):
             if 'facturas_procesadas' in request.session:
                 del request.session['facturas_procesadas']
 
-            messages.success(request, 'Facturas guardadas correctamente')
+            messages.success(request, '¡Las facturas se han guardado correctamente!')
             return redirect('gestion_facturas:lista_facturas')
 
         except Exception as e:
-            messages.error(request, f'Error al guardar las facturas: {str(e)}')
+            messages.error(request, 'No se pudieron guardar las facturas. Por favor, intente nuevamente o contacte al soporte técnico')
             return redirect('gestion_facturas:confirmar_datos')
 
     return redirect('gestion_facturas:index')
@@ -256,7 +256,7 @@ def detalle_factura(request, factura_id):
             'productos': productos
         })
     except Factura.DoesNotExist:
-        messages.error(request, 'La factura no existe')
+        messages.error(request, 'No se encontró la factura solicitada')
         return redirect('gestion_facturas:lista_facturas')
 
 def ver_imagen(request, factura_id):
@@ -267,8 +267,8 @@ def ver_imagen(request, factura_id):
                 'factura': factura
             })
         else:
-            messages.error(request, 'No hay imagen disponible para esta factura')
+            messages.error(request, 'No se encontró la imagen de la factura')
             return redirect('gestion_facturas:lista_facturas')
     except Factura.DoesNotExist:
-        messages.error(request, 'La factura no existe')
+        messages.error(request, 'No se encontró la factura solicitada')
         return redirect('gestion_facturas:lista_facturas')
