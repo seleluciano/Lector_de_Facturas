@@ -134,138 +134,141 @@ def confirmar_datos(request):
     return redirect('gestion_facturas:cargar_factura')
 
 def lista_facturas(request):
-    facturas = Factura.objects.all()
+    facturas = Factura.objects.all().order_by('-fecha_emision')
     return render(request, 'gestion_facturas/lista_facturas.html', {'facturas': facturas})
 
 def guardar_factura(request):
     if request.method == 'POST':
         try:
-            # Obtener las facturas procesadas de la sesión
-            facturas_procesadas = request.session.get('facturas_procesadas', [])
+            # Obtener datos de la sesión
+            facturas = request.session.get('facturas_procesadas', [])
+            if not facturas:
+                messages.error(request, 'No hay facturas para guardar')
+                return redirect('gestion_facturas:confirmar_datos')
             
-            for i, factura in enumerate(facturas_procesadas):
-                # Obtener la fecha del formulario (esperamos dd/mm/aaaa del input text)
+            for i, factura in enumerate(facturas):
+                # Convertir valores numéricos de formato argentino a decimal
+                def convertir_valor(valor):
+                    if isinstance(valor, str):
+                        # Eliminar el símbolo de moneda y espacios
+                        valor = valor.replace('$', '').replace(' ', '')
+                        # Reemplazar coma por punto para el decimal
+                        valor = valor.replace(',', '.')
+                        try:
+                            return float(valor)
+                        except ValueError:
+                            return 0.0
+                    return valor
+
+                # Convertir la fecha al formato correcto
                 fecha_str = request.POST.get(f'fecha_{i+1}')
                 fecha = None
                 if fecha_str:
                     try:
-                        # Intentar parsear la fecha en formato dd/mm/aaaa
                         fecha = datetime.strptime(fecha_str, '%d/%m/%Y').date()
                     except ValueError:
-                        messages.error(request, f'Formato de fecha inválido para guardar: {fecha_str}. Esperado DD/MM/YYYY.')
-                        return redirect('gestion_facturas:cargar_factura')
+                        messages.error(request, f'Formato de fecha inválido: {fecha_str}. Use DD/MM/YYYY')
+                        return redirect('gestion_facturas:confirmar_datos')
+
+                # Obtener la imagen de la sesión
+                imagen_data = factura.get('imagen_original_base64')
+                if not imagen_data:
+                    messages.error(request, 'No se encontró la imagen de la factura')
+                    return redirect('gestion_facturas:confirmar_datos')
+
+                # Convertir la imagen base64 a archivo
+                try:
+                    imagen_bytes = base64.b64decode(imagen_data)
+                    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+                    temp_file.write(imagen_bytes)
+                    temp_file.close()
+                except Exception as e:
+                    messages.error(request, f'Error al procesar la imagen: {str(e)}')
+                    return redirect('gestion_facturas:confirmar_datos')
 
                 # Crear nueva factura
-                nueva_factura = Factura(
-                    numero=request.POST.get(f'numero_{i+1}'),
-                    punto_venta=request.POST.get(f'punto_venta_{i+1}'),
-                    fecha_emision=fecha,
-                    cuit=request.POST.get(f'cuit_{i+1}'),
-                    cuit_emisor=request.POST.get(f'cuit_emisor_{i+1}'),
-                    razon_social_emisor=request.POST.get(f'razon_social_emisor_{i+1}'),
-                    monto_total=request.POST.get(f'total_{i+1}'),
-                    tipo_factura=request.POST.get(f'tipo_factura_{i+1}'),
-                    condicion_venta=request.POST.get(f'condicion_venta_{i+1}'),
-                    condicion_iva=request.POST.get(f'condicion_iva_{i+1}'),
-                    subtotal=request.POST.get(f'subtotal_{i+1}'),
-                    iva=request.POST.get(f'iva_{i+1}'),
-                    percepcion_iibb=request.POST.get(f'percepcion_iibb_{i+1}'),
-                    otros_tributos=request.POST.get(f'otros_tributos_{i+1}'),
-                    tipo_copia=request.POST.get(f'tipo_copia_{i+1}'),
-                    razon_social_cliente=request.POST.get(f'razon_social_cliente_{i+1}')
-                )
-                
-                # Convertir la imagen base64 a archivo
-                imagen_base64 = factura['imagen_original_base64']
-                imagen_bytes = base64.b64decode(imagen_base64)
-                
-                # Crear un archivo temporal
-                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
-                temp_file.write(imagen_bytes)
-                temp_file.close()
-                
-                # Guardar la imagen en el modelo
-                with open(temp_file.name, 'rb') as f:
-                    nueva_factura.imagen.save(f'factura_{nueva_factura.numero}.png', File(f), save=True)
-                
-                # Eliminar el archivo temporal
-                os.unlink(temp_file.name)
-                
-                # Guardar la factura
-                nueva_factura.save()
+                try:
+                    nueva_factura = Factura(
+                        tipo_factura=request.POST.get(f'tipo_factura_{i+1}'),
+                        punto_venta=request.POST.get(f'punto_venta_{i+1}'),
+                        numero=request.POST.get(f'numero_{i+1}'),
+                        fecha_emision=fecha,
+                        tipo_copia=request.POST.get(f'tipo_copia_{i+1}'),
+                        cuit=request.POST.get(f'cuit_{i+1}'),
+                        cuit_emisor=request.POST.get(f'cuit_emisor_{i+1}'),
+                        razon_social_cliente=request.POST.get(f'razon_social_cliente_{i+1}'),
+                        razon_social_emisor=request.POST.get(f'razon_social_emisor_{i+1}'),
+                        condicion_venta=request.POST.get(f'condicion_venta_{i+1}'),
+                        condicion_iva=request.POST.get(f'condicion_iva_{i+1}'),
+                        subtotal=convertir_valor(request.POST.get(f'subtotal_{i+1}')),
+                        iva=convertir_valor(request.POST.get(f'iva_{i+1}')),
+                        percepcion_iibb=convertir_valor(request.POST.get(f'percepcion_iibb_{i+1}')),
+                        otros_tributos=convertir_valor(request.POST.get(f'otros_tributos_{i+1}')),
+                        monto_total=convertir_valor(request.POST.get(f'total_{i+1}'))
+                    )
+                    nueva_factura.save()
 
-                # Guardar los productos
-                # Obtener todos los campos de productos del formulario
-                productos_data = {}
-                # Iterar sobre los keys para encontrar los campos de producto
-                for key in request.POST:
-                     if key.startswith(f'producto_'):
-                        # Extraer información del nombre del campo
-                        # Formato esperado: producto_[tipo]_[factura]_[indice]
-                        parts = key.split('_')
-                        if len(parts) == 4:
-                            tipo, factura_idx_str, prod_idx_str = parts[1], parts[2], parts[3]
-                            
-                            try:
-                                factura_idx = int(factura_idx_str)
-                                prod_idx = int(prod_idx_str)
-                                if factura_idx == i + 1:  # Solo procesar productos de esta factura
-                                    if prod_idx not in productos_data:
-                                        productos_data[prod_idx] = {}
-                                    productos_data[prod_idx][tipo] = request.POST.get(key)
-                            except ValueError:
-                                # Ignorar campos con índices no numéricos
-                                continue
+                    # Guardar la imagen
+                    with open(temp_file.name, 'rb') as f:
+                        nueva_factura.imagen.save(f'factura_{nueva_factura.numero}.png', File(f), save=True)
 
+                    # Eliminar el archivo temporal
+                    os.unlink(temp_file.name)
 
-                # Crear los productos
-                for prod_idx, prod_data in productos_data.items():
-                    # Asegurarse de que la cantidad sea un número válido
-                    cantidad_str = prod_data.get('cantidad', '').replace(',', '.')
-                    # Obtener los nuevos campos
-                    precio_unitario_str = prod_data.get('precio_unitario', '')
-                    importe_bonificado_str = prod_data.get('importe_bonificado', '')
-                    subtotal_producto_str = prod_data.get('subtotal', '')
-
-                    try:
-                        cantidad = float(cantidad_str)
-                        # Convertir los nuevos campos a float, manejando posibles errores
-                        precio_unitario = float(precio_unitario_str.replace(',', '.')) if precio_unitario_str else 0.0
-                        importe_bonificado = float(importe_bonificado_str.replace(',', '.')) if importe_bonificado_str else 0.0
-                        subtotal_producto = float(subtotal_producto_str.replace(',', '.')) if subtotal_producto_str else 0.0
-
-                    except ValueError:
-                        # Si la cantidad o algún importe no es un número válido, saltar este producto
-                        print(f"Advertencia: Datos numéricos inválidos para el producto {prod_data.get('descripcion', '')}: Cantidad='{cantidad_str}', PU='{precio_unitario_str}', Bon='{importe_bonificado_str}', SubT='{subtotal_producto_str}'. Ignorando producto.")
-                        continue # Saltar al siguiente producto
-
-                    # Crear el objeto ProductoFactura
-                    if 'descripcion' in prod_data:
-                        ProductoFactura.objects.create(
+                    # Guardar productos
+                    productos = factura.get('datos', {}).get('productos', [])
+                    for j, producto in enumerate(productos):
+                        nuevo_producto = ProductoFactura(
                             factura=nueva_factura,
-                            descripcion=prod_data['descripcion'],
-                            cantidad=cantidad,
-                            precio_unitario=precio_unitario,
-                            importe_bonificado=importe_bonificado,
-                            subtotal=subtotal_producto,
+                            descripcion=request.POST.get(f'producto_descripcion_{i+1}_{j+1}'),
+                            cantidad=convertir_valor(request.POST.get(f'producto_cantidad_{i+1}_{j+1}')),
+                            precio_unitario=convertir_valor(request.POST.get(f'producto_precio_unitario_{i+1}_{j+1}')),
+                            importe_bonificado=convertir_valor(request.POST.get(f'producto_importe_bonificado_{i+1}_{j+1}')),
+                            subtotal=convertir_valor(request.POST.get(f'producto_subtotal_{i+1}_{j+1}'))
                         )
-            
+                        nuevo_producto.save()
+
+                except Exception as e:
+                    messages.error(request, f'Error al guardar la factura: {str(e)}')
+                    if os.path.exists(temp_file.name):
+                        os.unlink(temp_file.name)
+                    return redirect('gestion_facturas:confirmar_datos')
+
             # Limpiar la sesión
             if 'facturas_procesadas' in request.session:
                 del request.session['facturas_procesadas']
-            
-            messages.success(request, 'Facturas guardadas exitosamente')
+
+            messages.success(request, 'Facturas guardadas correctamente')
             return redirect('gestion_facturas:lista_facturas')
-            
+
         except Exception as e:
-            print(f"Error en guardar_factura: {str(e)}")
             messages.error(request, f'Error al guardar las facturas: {str(e)}')
-            # Limpiar la sesión en caso de error antes de redirigir
-            if 'facturas_procesadas' in request.session:
-                del request.session['facturas_procesadas']
-            return redirect('gestion_facturas:cargar_factura')
-    
-    # Si es un método GET (acceso directo sin POST), limpiar la sesión
-    if 'facturas_procesadas' in request.session:
-        del request.session['facturas_procesadas']
-    return redirect('gestion_facturas:cargar_factura')
+            return redirect('gestion_facturas:confirmar_datos')
+
+    return redirect('gestion_facturas:index')
+
+def detalle_factura(request, factura_id):
+    try:
+        factura = Factura.objects.get(id=factura_id)
+        productos = factura.productos.all()
+        return render(request, 'gestion_facturas/detalle_factura.html', {
+            'factura': factura,
+            'productos': productos
+        })
+    except Factura.DoesNotExist:
+        messages.error(request, 'La factura no existe')
+        return redirect('gestion_facturas:lista_facturas')
+
+def ver_imagen(request, factura_id):
+    try:
+        factura = Factura.objects.get(id=factura_id)
+        if factura.imagen:
+            return render(request, 'gestion_facturas/ver_imagen.html', {
+                'factura': factura
+            })
+        else:
+            messages.error(request, 'No hay imagen disponible para esta factura')
+            return redirect('gestion_facturas:lista_facturas')
+    except Factura.DoesNotExist:
+        messages.error(request, 'La factura no existe')
+        return redirect('gestion_facturas:lista_facturas')
