@@ -258,7 +258,8 @@ def extraer_datos_factura(texto):
     patrones = {
         'punto_venta': [
             r'Punto\s*de\s*Venta(?:\s*|\s*:\s*)(\d{4})',
-            r'PV\s*:\s*(\d{4})'
+            r'PV\s*:\s*(\d{4})',
+            r'Punto\s*de\s*Venta;?\s*(\d{4})'
         ],
         'numero': [
             r'Nro(?:\.|s)?:?\s*(\d{8})',
@@ -274,20 +275,25 @@ def extraer_datos_factura(texto):
             r'DNI:\s*(\d{2}[-\s]?\d{8}[-\s]?\d{1})'
         ],
         'cuit_emisor': [
-            r'Domicilio\s*Comercial:[^\n]*CUIT:\s*(\d{2}[-\s]?\d{8}[-\s]?\d{1})',  # Patrón específico para el formato de la factura
-            r'CUIT:\s*(\d{2}[-\s]?\d{8}[-\s]?\d{1})',  # Patrón general para CUIT
+            r'Domicilio\s*Comercial:[^\n]*CUIT:\s*(\d{2}[-\s]?\d{8}[-\s]?\d{1})',
+            r'CUIT:\s*(\d{2}[-\s]?\d{8}[-\s]?\d{1})',
             r'(?:CUIT|CUIL)\s*(?:Emisor|Vendedor|Empresa)[.:\s]*(\d{2}[-\s]?\d{8}[-\s]?\d{1})',
             r'(?:CUIT|CUIL)\s*[.:\s]*(\d{2}[-\s]?\d{8}[-\s]?\d{1})',
-            r'Raz[oó]n\s*Social[^\n]*CUIT:\s*(\d{2}[-\s]?\d{8}[-\s]?\d{1})',  # Patrón para cuando el CUIT está después de la razón social
-            r'Global\s*Networks[^\n]*CUIT:\s*(\d{2}[-\s]?\d{8}[-\s]?\d{1})'  # Patrón específico para esta factura
+            r'Raz[oó]n\s*Social[^\n]*CUIT:\s*(\d{2}[-\s]?\d{8}[-\s]?\d{1})',
+            r'Global\s*Networks[^\n]*CUIT:\s*(\d{2}[-\s]?\d{8}[-\s]?\d{1})',
+            r'CUIT:\s*(\d{2}[-\s]?\d{8}[-\s]?\d{1})',
+            r'CUIT:\s*(\d{2}-\d{8}-\d{1})'  # Patrón específico para el formato con guiones
         ],
         'razon_social_emisor': [
-            r'(?:Raz[oó]n\s*Social|Denominaci[oó]n|Empresa|Vendedor)\s*(?:Emisor|Vendedor|Empresa)[.:\s]*([^\n]+?)(?:\s*Fecha|$)',  # Se detiene en "Fecha" o fin de línea
-            r'(?:Raz[oó]n\s*Social|Denominaci[oó]n|Empresa|Vendedor)[.:\s]*([^\n]+?)(?:\s*Fecha|$)',  # Se detiene en "Fecha" o fin de línea
-            r'Raz[oó]n\s*Soclal:\s*([^\n]+?)(?:\s*Fecha|$)',  # Se detiene en "Fecha" o fin de línea
-            r'Emisor[.:\s]*([^\n]+?)(?:\s*Fecha|$)',  # Se detiene en "Fecha" o fin de línea
-            r'Vendedor[.:\s]*([^\n]+?)(?:\s*Fecha|$)',  # Se detiene en "Fecha" o fin de línea
-            r'Empresa[.:\s]*([^\n]+?)(?:\s*Fecha|$)'  # Se detiene en "Fecha" o fin de línea
+            r'(?:Raz[oó]n\s*Social|Denominaci[oó]n|Empresa|Vendedor)\s*(?:Emisor|Vendedor|Empresa)[.:\s]*([^\n]+?)(?:\s*Fecha|$)',
+            r'(?:Raz[oó]n\s*Social|Denominaci[oó]n|Empresa|Vendedor)[.:\s]*([^\n]+?)(?:\s*Fecha|$)',
+            r'Raz[oó]n\s*Soclal:\s*([^\n]+?)(?:\s*Fecha|$)',
+            r'Emisor[.:\s]*([^\n]+?)(?:\s*Fecha|$)',
+            r'Vendedor[.:\s]*([^\n]+?)(?:\s*Fecha|$)',
+            r'Empresa[.:\s]*([^\n]+?)(?:\s*Fecha|$)',
+            r'Raz[oó]n\s*Soclal[.:\s]*([^\n]+?)(?:\s*Fecha|$)',
+            r'Raz[oó]n\s*Soclal:\s*([^\n]+?)(?:\s*CUIT|$)',  # Patrón específico para "Razón Soclal: Tech Consulting SRL"
+            r'Raz[oó]n\s*Soclal:\s*([^\n]+?)(?:\s*CUIT|$)'  # Patrón específico para cuando termina en CUIT
         ],
         'monto_total': [
             rf'Importe\s*Total:\s*\$?\s*{patron_valor_numerico}',
@@ -344,6 +350,7 @@ def extraer_datos_factura(texto):
         ],
         'razon_social_cliente': [
             r'(?:Raz[oó]n\s*Social|Cliente|Denominaci[oó]n|Nombre\s*o\s*Raz[oó]n\s*Social)[.:\s]*([^\n]+)',
+            r'Apellido\s*y\s*Nombra\s*/\s*Raz[oó]n\s*Soclal:\s*([^\n]+)', 
             r'Apellido\s*y\s*Nombra\s*/\s*Raz[oó]n\s*Soclal:\s*([^\n]+)'  # Para el caso específico de "Apellido y Nombra / Razón Soclal"
         ]
     }
