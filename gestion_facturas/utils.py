@@ -348,9 +348,14 @@ def extraer_datos_factura(texto):
             r'Copia\s*(Original|Duplicado)'
         ],
         'razon_social_cliente': [
-            r'(?:Raz[oó]n\s*Social|Cliente|Denominaci[oó]n|Nombre\s*o\s*Raz[oó]n\s*Social)[.:\s]*([^\n]+)',
-            r'Apellido\s*y\s*Nombra\s*/\s*Raz[oó]n\s*Soclal:\s*([^\n]+)',
-            r'Apellido\s*y\s*Nombra\s*/\s*Raz[oó]n\s*Soclal:\s*([^\n]+)'
+            r'(?:Raz[oó]n\s*Social|Cliente|Denominaci[oó]n|Nombre\s*o\s*Raz[oó]n\s*Social)[.:\s]*([^\n]+?)(?:\s*(?:CUIT|DNI|IVA|Fecha|$))',
+            r'Apellido\s*y\s*Nombra\s*/\s*Raz[oó]n\s*Soclal:\s*([^\n]+?)(?:\s*(?:CUIT|DNI|IVA|Fecha|$))',
+            r'Cliente\s*[.:\s]*([^\n]+?)(?:\s*(?:CUIT|DNI|IVA|Fecha|$))',
+            r'Comprador\s*[.:\s]*([^\n]+?)(?:\s*(?:CUIT|DNI|IVA|Fecha|$))',
+            r'Destinatario\s*[.:\s]*([^\n]+?)(?:\s*(?:CUIT|DNI|IVA|Fecha|$))',
+            r'Adquirente\s*[.:\s]*([^\n]+?)(?:\s*(?:CUIT|DNI|IVA|Fecha|$))',
+            r'Nombre\s*[.:\s]*([^\n]+?)(?:\s*(?:CUIT|DNI|IVA|Fecha|$))',
+            r'Denominaci[oó]n\s*[.:\s]*([^\n]+?)(?:\s*(?:CUIT|DNI|IVA|Fecha|$))'
         ]
     }
 
@@ -519,15 +524,23 @@ def detectar_tipo_factura(texto):
     """
     # Buscar en las primeras líneas del texto
     lineas = texto.split('\n')
-    for i in range(min(3, len(lineas))):  # Buscar en las primeras 3 líneas
+    for i in range(min(5, len(lineas))):  # Aumentamos a 5 líneas para buscar más arriba
         linea = lineas[i].strip()
         
-        # Patrones específicos para el tipo de factura
+        # Patrones específicos para el tipo de factura en las primeras líneas
         if re.search(r'^A\s*\|', linea, re.IGNORECASE) or re.search(r'^A\s*\|.*FACTURA', linea, re.IGNORECASE):
             return 'A'
         if re.search(r'^B\s*\|', linea, re.IGNORECASE) or re.search(r'^B\s*\|.*FACTURA', linea, re.IGNORECASE):
             return 'B'
         if re.search(r'^C\s*\|', linea, re.IGNORECASE) or re.search(r'^C\s*\|.*FACTURA', linea, re.IGNORECASE):
+            return 'C'
+        
+        # Patrones adicionales para las primeras líneas
+        if re.search(r'FACTURA\s*TIPO\s*A', linea, re.IGNORECASE) or re.search(r'TIPO\s*A\s*FACTURA', linea, re.IGNORECASE):
+            return 'A'
+        if re.search(r'FACTURA\s*TIPO\s*B', linea, re.IGNORECASE) or re.search(r'TIPO\s*B\s*FACTURA', linea, re.IGNORECASE):
+            return 'B'
+        if re.search(r'FACTURA\s*TIPO\s*C', linea, re.IGNORECASE) or re.search(r'TIPO\s*C\s*FACTURA', linea, re.IGNORECASE):
             return 'C'
     
     # Si no se encuentra en las primeras líneas, buscamos en todo el texto
@@ -541,19 +554,36 @@ def detectar_tipo_factura(texto):
             r'comprobante(?:\s+|\s*[\\s\\W]*)\bA\b',
             r'iva\s*responsable\s*inscripto',
             r'^A\s*\|',  # Para el caso específico de "A | FACTURA"
-            r'^A\s*\|.*FACTURA'  # Para el caso específico de "A | FACTURA"
+            r'^A\s*\|.*FACTURA',  # Para el caso específico de "A | FACTURA"
+            r'factura\s*tipo\s*a',
+            r'tipo\s*a\s*factura',
+            r'comprobante\s*tipo\s*a',
+            r'responsable\s*inscripto',
+            r'iva\s*inscripto'
         ],
         'B': [
             r'factura(?:\s+|\s*[\\s\\W]*)\bB\b',
             r'tipo(?:\s+|\s*[\\s\\W]*)\bB\b',
             r'comprobante(?:\s+|\s*[\\s\\W]*)\bB\b',
-            r'iva\s*responsable\s*no\s*inscripto'
+            r'iva\s*responsable\s*no\s*inscripto',
+            r'factura\s*tipo\s*b',
+            r'tipo\s*b\s*factura',
+            r'comprobante\s*tipo\s*b',
+            r'responsable\s*no\s*inscripto',
+            r'iva\s*no\s*inscripto',
+            r'consumidor\s*final'
         ],
         'C': [
             r'factura(?:\s+|\s*[\\s\\W]*)\bC\b',
             r'tipo(?:\s+|\s*[\\s\\W]*)\bC\b',
             r'comprobante(?:\s+|\s*[\\s\\W]*)\bC\b',
-            r'iva\s*exento'
+            r'iva\s*exento',
+            r'factura\s*tipo\s*c',
+            r'tipo\s*c\s*factura',
+            r'comprobante\s*tipo\s*c',
+            r'iva\s*exento',
+            r'exento\s*iva',
+            r'no\s*categorizado'
         ]
     }
 
@@ -562,6 +592,17 @@ def detectar_tipo_factura(texto):
         for patron in lista_patrones:
             if re.search(patron, texto):
                 return tipo
+
+    # Si no se puede determinar, intentar inferir por el CUIT
+    cuit_match = re.search(r'CUIT:\s*(\d{2})[-\s]?\d{8}[-\s]?\d{1}', texto)
+    if cuit_match:
+        tipo_cuit = cuit_match.group(1)
+        if tipo_cuit in ['30', '33', '34']:  # CUITs de empresas
+            return 'A'
+        elif tipo_cuit in ['20', '23', '24']:  # CUITs de personas físicas
+            return 'B'
+        elif tipo_cuit in ['50', '51', '52']:  # CUITs de monotributistas
+            return 'C'
 
     # Si no se puede determinar, devolver None
     return None
