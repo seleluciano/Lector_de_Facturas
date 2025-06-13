@@ -296,16 +296,29 @@ def editar_factura(request, factura_id):
     if request.method == 'POST':
         factura = get_object_or_404(Factura, id=factura_id)
         
-        # Actualizar los campos de la factura
-        factura.tipo_factura = request.POST.get('tipo_factura')
-        factura.razon_social_cliente = request.POST.get('razon_social_cliente')
-        factura.cuit = request.POST.get('cuit')
-        factura.fecha = request.POST.get('fecha')
-        factura.monto_total = request.POST.get('monto_total')
-        
         try:
+            # Actualizar los campos de la factura
+            factura.tipo_factura = request.POST.get('tipo_factura')
+            factura.punto_venta = request.POST.get('punto_venta')
+            factura.numero = request.POST.get('numero')
+            factura.fecha_emision = request.POST.get('fecha')
+            factura.condicion_venta = request.POST.get('condicion_venta')
+            factura.condicion_iva = request.POST.get('condicion_iva')
+            factura.razon_social_cliente = request.POST.get('razon_social_cliente')
+            factura.cuit = request.POST.get('cuit')
+            factura.razon_social_emisor = request.POST.get('razon_social_emisor')
+            factura.cuit_emisor = request.POST.get('cuit_emisor')
+            
+            # Convertir y actualizar campos numéricos
+            factura.subtotal = float(request.POST.get('subtotal', 0))
+            factura.iva = float(request.POST.get('iva', 0))
+            factura.percepcion_iibb = float(request.POST.get('percepcion_iibb', 0))
+            factura.monto_total = float(request.POST.get('monto_total', 0))
+            
             factura.save()
             messages.success(request, 'Factura actualizada correctamente')
+        except ValueError as e:
+            messages.error(request, f'Error en los valores numéricos: {str(e)}')
         except Exception as e:
             messages.error(request, f'Error al actualizar la factura: {str(e)}')
             

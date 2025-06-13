@@ -1,5 +1,7 @@
 {% extends 'base.html' %}
 
+{% block title %}Lista de Facturas{% endblock %}
+
 {% block content %}
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -11,7 +13,7 @@
 
     {% if facturas %}
         <div class="table-responsive">
-            <table class="table table-striped table-hover">
+            <table class="table table-striped">
                 <thead>
                     <tr>
                         <th>Número</th>
@@ -19,6 +21,9 @@
                         <th>Fecha</th>
                         <th>Razón Social</th>
                         <th>CUIT</th>
+                        <th>Subtotal</th>
+                        <th>IVA</th>
+                        <th>Percepción IIBB</th>
                         <th>Monto Total</th>
                         <th>Acciones</th>
                     </tr>
@@ -28,10 +33,13 @@
                     <tr>
                         <td>{{ factura.numero }}</td>
                         <td>{{ factura.tipo_factura }}</td>
-                        <td>{{ factura.fecha|date:"d/m/Y" }}</td>
+                        <td>{{ factura.fecha_emision|date:"d/m/Y" }}</td>
                         <td>{{ factura.razon_social_cliente }}</td>
                         <td>{{ factura.cuit }}</td>
-                        <td>${{ factura.monto_total }}</td>
+                        <td>${{ factura.subtotal|floatformat:2 }}</td>
+                        <td>${{ factura.iva|floatformat:2 }}</td>
+                        <td>${{ factura.percepcion_iibb|floatformat:2 }}</td>
+                        <td>${{ factura.monto_total|floatformat:2 }}</td>
                         <td>
                             <div class="btn-group" role="group">
                                 {% if factura.imagen %}
@@ -39,138 +47,140 @@
                                     <i class="fas fa-image"></i>
                                 </a>
                                 {% endif %}
-                                <button type="button" class="btn btn-warning btn-sm" 
-                                        data-bs-toggle="modal" 
-                                        data-bs-target="#editModal{{ factura.id }}">
+                                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#editarModal{{ factura.id }}">
                                     <i class="fas fa-edit"></i>
                                 </button>
-                                <button type="button" class="btn btn-danger btn-sm" 
-                                        data-bs-toggle="modal" 
-                                        data-bs-target="#deleteModal{{ factura.id }}">
+                                <button type="button" class="btn btn-danger btn-sm" onclick="confirmarEliminar('{{ factura.id }}')">
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </div>
-
-                            <!-- Modal de Edición -->
-                            <div class="modal fade" id="editModal{{ factura.id }}" tabindex="-1" aria-labelledby="editModalLabel{{ factura.id }}" aria-hidden="true">
-                                <div class="modal-dialog modal-lg">
-                                    <div class="modal-content">
-                                        <div class="modal-header">
-                                            <h5 class="modal-title" id="editModalLabel{{ factura.id }}">Editar Factura</h5>
-                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                        </div>
-                                        <form action="{% url 'gestion_facturas:editar_factura' factura.id %}" method="post">
-                                            {% csrf_token %}
-                                            <div class="modal-body">
-                                                <div class="row">
-                                                    <div class="col-md-6">
-                                                        <div class="mb-3">
-                                                            <label for="tipo_factura" class="form-label">Tipo de Factura</label>
-                                                            <select name="tipo_factura" id="tipo_factura" class="form-select" required>
-                                                                <option value="A" {% if factura.tipo_factura == 'A' %}selected{% endif %}>A</option>
-                                                                <option value="B" {% if factura.tipo_factura == 'B' %}selected{% endif %}>B</option>
-                                                                <option value="C" {% if factura.tipo_factura == 'C' %}selected{% endif %}>C</option>
-                                                            </select>
-                                                        </div>
-                                                        <div class="mb-3">
-                                                            <label for="punto_venta" class="form-label">Punto de Venta</label>
-                                                            <input type="text" class="form-control" id="punto_venta" name="punto_venta" value="{{ factura.punto_venta }}" required>
-                                                        </div>
-                                                        <div class="mb-3">
-                                                            <label for="numero" class="form-label">Número</label>
-                                                            <input type="text" class="form-control" id="numero" name="numero" value="{{ factura.numero }}" required>
-                                                        </div>
-                                                        <div class="mb-3">
-                                                            <label for="fecha" class="form-label">Fecha</label>
-                                                            <input type="date" class="form-control" id="fecha" name="fecha" value="{{ factura.fecha|date:'Y-m-d' }}" required>
-                                                        </div>
-                                                        <div class="mb-3">
-                                                            <label for="condicion_venta" class="form-label">Condición de Venta</label>
-                                                            <input type="text" class="form-control" id="condicion_venta" name="condicion_venta" value="{{ factura.condicion_venta }}">
-                                                        </div>
-                                                        <div class="mb-3">
-                                                            <label for="condicion_iva" class="form-label">Condición IVA</label>
-                                                            <input type="text" class="form-control" id="condicion_iva" name="condicion_iva" value="{{ factura.condicion_iva }}">
-                                                        </div>
-                                                    </div>
-                                                    <div class="col-md-6">
-                                                        <div class="mb-3">
-                                                            <label for="razon_social_cliente" class="form-label">Razón Social Cliente</label>
-                                                            <input type="text" class="form-control" id="razon_social_cliente" name="razon_social_cliente" value="{{ factura.razon_social_cliente }}" required>
-                                                        </div>
-                                                        <div class="mb-3">
-                                                            <label for="cuit" class="form-label">CUIT Cliente</label>
-                                                            <input type="text" class="form-control" id="cuit" name="cuit" value="{{ factura.cuit }}" required>
-                                                        </div>
-                                                        <div class="mb-3">
-                                                            <label for="razon_social_emisor" class="form-label">Razón Social Emisor</label>
-                                                            <input type="text" class="form-control" id="razon_social_emisor" name="razon_social_emisor" value="{{ factura.razon_social_emisor }}" required>
-                                                        </div>
-                                                        <div class="mb-3">
-                                                            <label for="cuit_emisor" class="form-label">CUIT Emisor</label>
-                                                            <input type="text" class="form-control" id="cuit_emisor" name="cuit_emisor" value="{{ factura.cuit_emisor }}" required>
-                                                        </div>
-                                                        <div class="mb-3">
-                                                            <label for="subtotal" class="form-label">Subtotal</label>
-                                                            <input type="number" step="0.01" class="form-control" id="subtotal" name="subtotal" value="{{ factura.subtotal }}" required>
-                                                        </div>
-                                                        <div class="mb-3">
-                                                            <label for="iva" class="form-label">IVA</label>
-                                                            <input type="number" step="0.01" class="form-control" id="iva" name="iva" value="{{ factura.iva }}" required>
-                                                        </div>
-                                                        <div class="mb-3">
-                                                            <label for="percepcion_iibb" class="form-label">Percepción IIBB</label>
-                                                            <input type="number" step="0.01" class="form-control" id="percepcion_iibb" name="percepcion_iibb" value="{{ factura.percepcion_iibb }}" required>
-                                                        </div>
-                                                        <div class="mb-3">
-                                                            <label for="monto_total" class="form-label">Monto Total</label>
-                                                            <input type="number" step="0.01" class="form-control" id="monto_total" name="monto_total" value="{{ factura.monto_total }}" required>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div class="modal-footer">
-                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                                                <button type="submit" class="btn btn-primary">Guardar Cambios</button>
-                                            </div>
-                                        </form>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Modal de Confirmación para Eliminar -->
-                            <div class="modal fade" id="deleteModal{{ factura.id }}" tabindex="-1" aria-labelledby="deleteModalLabel{{ factura.id }}" aria-hidden="true">
-                                <div class="modal-dialog">
-                                    <div class="modal-content">
-                                        <div class="modal-header">
-                                            <h5 class="modal-title" id="deleteModalLabel{{ factura.id }}">Confirmar Eliminación</h5>
-                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                        </div>
-                                        <div class="modal-body">
-                                            ¿Está seguro que desea eliminar la factura {{ factura.numero }}?
-                                            <br>
-                                            <small class="text-muted">Esta acción no se puede deshacer.</small>
-                                        </div>
-                                        <div class="modal-footer">
-                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                                            <form action="{% url 'gestion_facturas:eliminar_factura' factura.id %}" method="post" style="display: inline;">
-                                                {% csrf_token %}
-                                                <button type="submit" class="btn btn-danger">Eliminar</button>
-                                            </form>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
                         </td>
                     </tr>
+
+                    <!-- Modal de Edición -->
+                    <div class="modal fade" id="editarModal{{ factura.id }}" tabindex="-1" aria-labelledby="editarModalLabel{{ factura.id }}" aria-hidden="true">
+                        <div class="modal-dialog modal-lg">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title" id="editarModalLabel{{ factura.id }}">Editar Factura</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <form action="{% url 'gestion_facturas:editar_factura' factura.id %}" method="post">
+                                    {% csrf_token %}
+                                    <div class="modal-body">
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="tipo_factura" class="form-label">Tipo de Factura</label>
+                                                    <select class="form-select" id="tipo_factura" name="tipo_factura" required>
+                                                        <option value="A" {% if factura.tipo_factura == 'A' %}selected{% endif %}>A</option>
+                                                        <option value="B" {% if factura.tipo_factura == 'B' %}selected{% endif %}>B</option>
+                                                        <option value="C" {% if factura.tipo_factura == 'C' %}selected{% endif %}>C</option>
+                                                    </select>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label for="punto_venta" class="form-label">Punto de Venta</label>
+                                                    <input type="text" class="form-control" id="punto_venta" name="punto_venta" value="{{ factura.punto_venta }}" required>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label for="numero" class="form-label">Número</label>
+                                                    <input type="text" class="form-control" id="numero" name="numero" value="{{ factura.numero }}" required>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label for="fecha" class="form-label">Fecha</label>
+                                                    <input type="date" class="form-control" id="fecha" name="fecha" value="{{ factura.fecha_emision|date:'Y-m-d' }}" required>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label for="condicion_venta" class="form-label">Condición de Venta</label>
+                                                    <input type="text" class="form-control" id="condicion_venta" name="condicion_venta" value="{{ factura.condicion_venta }}" required>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label for="condicion_iva" class="form-label">Condición IVA</label>
+                                                    <input type="text" class="form-control" id="condicion_iva" name="condicion_iva" value="{{ factura.condicion_iva }}" required>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="razon_social_cliente" class="form-label">Razón Social Cliente</label>
+                                                    <input type="text" class="form-control" id="razon_social_cliente" name="razon_social_cliente" value="{{ factura.razon_social_cliente }}" required>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label for="cuit" class="form-label">CUIT Cliente</label>
+                                                    <input type="text" class="form-control" id="cuit" name="cuit" value="{{ factura.cuit }}" required>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label for="razon_social_emisor" class="form-label">Razón Social Emisor</label>
+                                                    <input type="text" class="form-control" id="razon_social_emisor" name="razon_social_emisor" value="{{ factura.razon_social_emisor }}" required>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label for="cuit_emisor" class="form-label">CUIT Emisor</label>
+                                                    <input type="text" class="form-control" id="cuit_emisor" name="cuit_emisor" value="{{ factura.cuit_emisor }}" required>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label for="subtotal" class="form-label">Subtotal</label>
+                                                    <input type="number" step="0.01" class="form-control" id="subtotal" name="subtotal" value="{{ factura.subtotal|stringformat:'.2f' }}" required>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label for="iva" class="form-label">IVA</label>
+                                                    <input type="number" step="0.01" class="form-control" id="iva" name="iva" value="{{ factura.iva|stringformat:'.2f' }}" required>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label for="percepcion_iibb" class="form-label">Percepción IIBB</label>
+                                                    <input type="number" step="0.01" class="form-control" id="percepcion_iibb" name="percepcion_iibb" value="{{ factura.percepcion_iibb|stringformat:'.2f' }}" required>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label for="monto_total" class="form-label">Monto Total</label>
+                                                    <input type="number" step="0.01" class="form-control" id="monto_total" name="monto_total" value="{{ factura.monto_total|stringformat:'.2f' }}" required>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                        <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
     {% else %}
         <div class="alert alert-info">
-            No hay facturas cargadas. <a href="{% url 'gestion_facturas:cargar_factura' %}">Cargar una nueva factura</a>
+            No hay facturas registradas.
         </div>
     {% endif %}
 </div>
+
+<!-- Modal de Confirmación de Eliminación -->
+<div class="modal fade" id="eliminarModal" tabindex="-1" aria-labelledby="eliminarModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="eliminarModalLabel">Confirmar Eliminación</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                ¿Está seguro que desea eliminar esta factura?
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <form id="eliminarForm" action="" method="post" style="display: inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">Eliminar</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function confirmarEliminar(facturaId) {
+    var modal = new bootstrap.Modal(document.getElementById('eliminarModal'));
+    document.getElementById('eliminarForm').action = `/gestion_facturas/eliminar/${facturaId}/`;
+    modal.show();
+}
+</script>
 {% endblock %} 
