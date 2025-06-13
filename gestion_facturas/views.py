@@ -1,4 +1,4 @@
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from .models import Factura, ProductoFactura
 from .utils import procesar_factura, preprocesar_imagen, extraer_texto
@@ -15,6 +15,7 @@ import base64
 from io import BytesIO
 from django.core.files.base import File
 import re
+from django.http import HttpResponse
 
 # Create your views here.
 
@@ -272,3 +273,21 @@ def ver_imagen(request, factura_id):
     except Factura.DoesNotExist:
         messages.error(request, 'No se encontró la factura solicitada')
         return redirect('gestion_facturas:lista_facturas')
+
+def eliminar_factura(request, factura_id):
+    if request.method == 'POST':
+        factura = get_object_or_404(Factura, id=factura_id)
+        
+        # Eliminar la imagen si existe
+        if factura.imagen:
+            try:
+                if os.path.isfile(factura.imagen.path):
+                    os.remove(factura.imagen.path)
+            except Exception as e:
+                messages.warning(request, f"Error al eliminar la imagen: {str(e)}")
+        
+        # Eliminar la factura
+        factura.delete()
+        messages.success(request, 'Factura eliminada correctamente')
+        
+    return redirect('gestion_facturas:lista_facturas')
