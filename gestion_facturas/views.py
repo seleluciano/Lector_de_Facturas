@@ -37,48 +37,53 @@ def cargar_factura(request):
                         print(f"Error al eliminar archivo temporal: {str(e)}")
                 del request.session['rutas_temporales']
 
-            # Obtener la imagen del request
-            imagen = request.FILES.get('imagen')
-            if not imagen:
+            # Obtener las imágenes del request
+            imagenes = request.FILES.getlist('imagen')
+            if not imagenes:
                 messages.error(request, 'Por favor, seleccione al menos una imagen de factura para procesar')
                 return redirect('gestion_facturas:cargar_factura')
 
-            # Leer la imagen directamente
-            imagen_bytes = imagen.read()
-            imagen_array = np.frombuffer(imagen_bytes, np.uint8)
-            imagen_cv = cv2.imdecode(imagen_array, cv2.IMREAD_COLOR)
-            
-            if imagen_cv is None:
-                messages.error(request, 'No se pudo procesar la imagen. Por favor, asegúrese de que el archivo sea una imagen válida')
+            facturas_procesadas = []
+            for imagen in imagenes:
+                # Leer la imagen directamente
+                imagen_bytes = imagen.read()
+                imagen_array = np.frombuffer(imagen_bytes, np.uint8)
+                imagen_cv = cv2.imdecode(imagen_array, cv2.IMREAD_COLOR)
+                
+                if imagen_cv is None:
+                    messages.warning(request, f'No se pudo procesar la imagen {imagen.name}. Se omitirá.')
+                    continue
+
+                # Convertir la imagen original a base64 para mostrarla
+                _, buffer = cv2.imencode('.png', imagen_cv)
+                imagen_original_base64 = base64.b64encode(buffer).decode('utf-8')
+
+                # Procesar la factura
+                datos = procesar_factura(imagen_cv)
+                print(f"Datos extraídos para {imagen.name}:", datos)  # Debug
+
+                # Extraer el texto directamente de la imagen procesada
+                texto = extraer_texto(preprocesar_imagen(imagen_cv))
+
+                # Crear diccionario con los datos de la factura procesada
+                factura_procesada = {
+                    'imagen_original_base64': imagen_original_base64,
+                    'texto_extraido': texto,
+                    'datos': datos,
+                    'nombre_archivo': imagen.name
+                }
+                print(f"Factura procesada {imagen.name}:", factura_procesada)  # Debug
+
+                facturas_procesadas.append(factura_procesada)
+
+            if not facturas_procesadas:
+                messages.error(request, 'No se pudo procesar ninguna imagen. Por favor, intente nuevamente.')
                 return redirect('gestion_facturas:cargar_factura')
 
-            # Convertir la imagen original a base64 para mostrarla
-            _, buffer = cv2.imencode('.png', imagen_cv)
-            imagen_original_base64 = base64.b64encode(buffer).decode('utf-8')
-
-            # Procesar la factura
-            datos = procesar_factura(imagen_cv)
-            print("Datos extraídos:", datos)  # Debug
-
-            # Extraer el texto directamente de la imagen procesada
-            texto = extraer_texto(preprocesar_imagen(imagen_cv))
-
-            # Crear diccionario con los datos de la factura procesada
-            factura_procesada = {
-                'imagen_original_base64': imagen_original_base64,
-                'texto_extraido': texto,
-                'datos': datos
-            }
-            print("Factura procesada:", factura_procesada)  # Debug
-
-            # Obtener facturas procesadas anteriormente
-            facturas_procesadas = request.session.get('facturas_procesadas', [])
-            facturas_procesadas.append(factura_procesada)
             request.session['facturas_procesadas'] = facturas_procesadas
-
             return redirect('gestion_facturas:confirmar_datos')
         except Exception as e:
-            messages.error(request, f'Error al procesar la factura: {str(e)}')
+            messages.error(request, f'Error al procesar las facturas: {str(e)}')
             return redirect('gestion_facturas:cargar_factura')
     
     return render(request, 'gestion_facturas/cargar_factura.html')
@@ -147,7 +152,7 @@ def guardar_factura(request):
                 messages.error(request, 'No hay facturas para guardar. Por favor, cargue al menos una factura')
                 return redirect('gestion_facturas:confirmar_datos')
             
-            for i, factura in enumerate(facturas):
+            for i, factura in enumerate(facturas, start=1):
                 # Convertir valores numéricos de formato argentino a decimal
                 def convertir_valor(valor):
                     if isinstance(valor, str):
@@ -162,7 +167,7 @@ def guardar_factura(request):
                     return valor
 
                 # Convertir la fecha al formato correcto
-                fecha_str = request.POST.get(f'fecha_{i+1}')
+                fecha_str = request.POST.get(f'fecha_{i}')
                 fecha = None
                 if fecha_str:
                     try:
@@ -189,23 +194,48 @@ def guardar_factura(request):
 
                 # Crear nueva factura
                 try:
+                    # Obtener y convertir valores numéricos
+                    subtotal = convertir_valor(request.POST.get(f'subtotal_{i}', '0.00'))
+                    iva = convertir_valor(request.POST.get(f'iva_{i}', '0.00'))
+                    percepcion_iibb = convertir_valor(request.POST.get(f'percepcion_iibb_{i}', '0.00'))
+                    otros_tributos = convertir_valor(request.POST.get(f'otros_tributos_{i}', '0.00'))
+                    monto_total = convertir_valor(request.POST.get(f'total_{i}', '0.00'))
+
+                    # Obtener datos de la factura
+                    tipo_factura = request.POST.get(f'tipo_factura_{i}')
+                    punto_venta = request.POST.get(f'punto_venta_{i}')
+                    numero = request.POST.get(f'numero_{i}')
+
+                    # Verificar si ya existe una factura con el mismo número, tipo y punto de venta
+                    factura_existente = Factura.objects.filter(
+                        tipo_factura=tipo_factura,
+                        punto_venta=punto_venta,
+                        numero=numero
+                    ).first()
+
+                    if factura_existente:
+                        messages.error(request, f'Ya existe una factura {tipo_factura} con punto de venta {punto_venta} y número {numero}. Por favor, verifique los datos.')
+                        if os.path.exists(temp_file.name):
+                            os.unlink(temp_file.name)
+                        return redirect('gestion_facturas:confirmar_datos')
+
                     nueva_factura = Factura(
-                        tipo_factura=request.POST.get(f'tipo_factura_{i+1}'),
-                        punto_venta=request.POST.get(f'punto_venta_{i+1}'),
-                        numero=request.POST.get(f'numero_{i+1}'),
+                        tipo_factura=tipo_factura,
+                        punto_venta=punto_venta,
+                        numero=numero,
                         fecha_emision=fecha,
-                        tipo_copia=request.POST.get(f'tipo_copia_{i+1}'),
-                        cuit=request.POST.get(f'cuit_{i+1}'),
-                        cuit_emisor=request.POST.get(f'cuit_emisor_{i+1}'),
-                        razon_social_cliente=request.POST.get(f'razon_social_cliente_{i+1}'),
-                        razon_social_emisor=request.POST.get(f'razon_social_emisor_{i+1}'),
-                        condicion_venta=request.POST.get(f'condicion_venta_{i+1}'),
-                        condicion_iva=request.POST.get(f'condicion_iva_{i+1}'),
-                        subtotal=convertir_valor(request.POST.get(f'subtotal_{i+1}')),
-                        iva=convertir_valor(request.POST.get(f'iva_{i+1}')),
-                        percepcion_iibb=convertir_valor(request.POST.get(f'percepcion_iibb_{i+1}')),
-                        otros_tributos=convertir_valor(request.POST.get(f'otros_tributos_{i+1}')),
-                        monto_total=convertir_valor(request.POST.get(f'total_{i+1}'))
+                        tipo_copia=request.POST.get(f'tipo_copia_{i}'),
+                        cuit=request.POST.get(f'cuit_{i}'),
+                        cuit_emisor=request.POST.get(f'cuit_emisor_{i}'),
+                        razon_social_cliente=request.POST.get(f'razon_social_cliente_{i}'),
+                        razon_social_emisor=request.POST.get(f'razon_social_emisor_{i}'),
+                        condicion_venta=request.POST.get(f'condicion_venta_{i}'),
+                        condicion_iva=request.POST.get(f'condicion_iva_{i}'),
+                        subtotal=subtotal,
+                        iva=iva,
+                        percepcion_iibb=percepcion_iibb,
+                        otros_tributos=otros_tributos,
+                        monto_total=monto_total
                     )
                     nueva_factura.save()
 
@@ -218,19 +248,19 @@ def guardar_factura(request):
 
                     # Guardar productos
                     productos = factura.get('datos', {}).get('productos', [])
-                    for j, producto in enumerate(productos):
+                    for j, producto in enumerate(productos, start=1):
                         nuevo_producto = ProductoFactura(
                             factura=nueva_factura,
-                            descripcion=request.POST.get(f'producto_descripcion_{i+1}_{j+1}'),
-                            cantidad=convertir_valor(request.POST.get(f'producto_cantidad_{i+1}_{j+1}')),
-                            precio_unitario=convertir_valor(request.POST.get(f'producto_precio_unitario_{i+1}_{j+1}')),
-                            importe_bonificado=convertir_valor(request.POST.get(f'producto_importe_bonificado_{i+1}_{j+1}')),
-                            subtotal=convertir_valor(request.POST.get(f'producto_subtotal_{i+1}_{j+1}'))
+                            descripcion=request.POST.get(f'producto_descripcion_{i}_{j}'),
+                            cantidad=convertir_valor(request.POST.get(f'producto_cantidad_{i}_{j}', '0.00')),
+                            precio_unitario=convertir_valor(request.POST.get(f'producto_precio_unitario_{i}_{j}', '0.00')),
+                            importe_bonificado=convertir_valor(request.POST.get(f'producto_importe_bonificado_{i}_{j}', '0.00')),
+                            subtotal=convertir_valor(request.POST.get(f'producto_subtotal_{i}_{j}', '0.00'))
                         )
                         nuevo_producto.save()
 
                 except Exception as e:
-                    messages.error(request, 'No se pudo guardar la factura. Por favor, verifique los datos e intente nuevamente')
+                    messages.error(request, f'No se pudo guardar la factura. Error: {str(e)}')
                     if os.path.exists(temp_file.name):
                         os.unlink(temp_file.name)
                     return redirect('gestion_facturas:confirmar_datos')
@@ -243,7 +273,7 @@ def guardar_factura(request):
             return redirect('gestion_facturas:index')
 
         except Exception as e:
-            messages.error(request, 'No se pudieron guardar las facturas. Por favor, intente nuevamente o contacte al soporte técnico')
+            messages.error(request, f'No se pudieron guardar las facturas. Error: {str(e)}')
             return redirect('gestion_facturas:confirmar_datos')
 
     return redirect('gestion_facturas:index')
