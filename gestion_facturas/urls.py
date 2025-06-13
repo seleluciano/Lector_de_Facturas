@@ -14,7 +14,7 @@ urlpatterns = [
     path('facturas/confirmar/', views.confirmar_datos, name='confirmar_datos'),
     path('facturas/guardar/', views.guardar_factura, name='guardar_factura'),
     path('imagen/<int:factura_id>/', views.ver_imagen, name='ver_imagen'),
-    path('eliminar/<int:factura_id>/', views.eliminar_factura, name='eliminar_factura'),
+    path('gestion_facturas/eliminar/<int:factura_id>/', views.eliminar_factura, name='eliminar_factura'),
     path('editar/<int:factura_id>/', views.editar_factura, name='editar_factura'),
 ]
 

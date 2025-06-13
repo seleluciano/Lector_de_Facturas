@@ -240,7 +240,7 @@ def guardar_factura(request):
                 del request.session['facturas_procesadas']
 
             messages.success(request, '¡Las facturas se han guardado correctamente!')
-            return redirect('gestion_facturas:lista_facturas')
+            return redirect('gestion_facturas:index')
 
         except Exception as e:
             messages.error(request, 'No se pudieron guardar las facturas. Por favor, intente nuevamente o contacte al soporte técnico')

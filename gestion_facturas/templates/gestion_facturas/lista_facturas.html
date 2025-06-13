@@ -179,7 +179,8 @@
 <script>
 function confirmarEliminar(facturaId) {
     var modal = new bootstrap.Modal(document.getElementById('eliminarModal'));
-    document.getElementById('eliminarForm').action = `/gestion_facturas/eliminar/${facturaId}/`;
+    var url = "{% url 'gestion_facturas:eliminar_factura' 0 %}".replace('0', facturaId);
+    document.getElementById('eliminarForm').action = url;
     modal.show();
 }
 </script>
