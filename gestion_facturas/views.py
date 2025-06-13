@@ -121,7 +121,7 @@ def confirmar_datos(request):
                 del request.session['rutas_temporales']
             
             messages.success(request, '¡Las facturas se han guardado correctamente!')
-            return redirect('gestion_facturas:lista_facturas')
+            return redirect('gestion_facturas:index')
         except Exception as e:
             messages.error(request, 'No se pudieron guardar las facturas. Por favor, verifique los datos e intente nuevamente')
             # Limpiar la sesión en caso de error antes de redirigir
@@ -290,4 +290,25 @@ def eliminar_factura(request, factura_id):
         factura.delete()
         messages.success(request, 'Factura eliminada correctamente')
         
-    return redirect('gestion_facturas:lista_facturas')
+    return redirect('gestion_facturas:index')
+
+def editar_factura(request, factura_id):
+    if request.method == 'POST':
+        factura = get_object_or_404(Factura, id=factura_id)
+        
+        # Actualizar los campos de la factura
+        factura.tipo_factura = request.POST.get('tipo_factura')
+        factura.razon_social_cliente = request.POST.get('razon_social_cliente')
+        factura.cuit = request.POST.get('cuit')
+        factura.fecha = request.POST.get('fecha')
+        factura.monto_total = request.POST.get('monto_total')
+        
+        try:
+            factura.save()
+            messages.success(request, 'Factura actualizada correctamente')
+        except Exception as e:
+            messages.error(request, f'Error al actualizar la factura: {str(e)}')
+            
+        return redirect('gestion_facturas:index')
+        
+    return redirect('gestion_facturas:index')
