@@ -25,6 +25,18 @@ def index(request):
 def cargar_factura(request):
     if request.method == 'POST':
         try:
+            # Limpiar caché y archivos temporales
+            if 'facturas_procesadas' in request.session:
+                del request.session['facturas_procesadas']
+            if 'rutas_temporales' in request.session:
+                for ruta in request.session['rutas_temporales']:
+                    try:
+                        if os.path.exists(ruta):
+                            os.remove(ruta)
+                    except Exception as e:
+                        print(f"Error al eliminar archivo temporal: {str(e)}")
+                del request.session['rutas_temporales']
+
             # Obtener la imagen del request
             imagen = request.FILES.get('imagen')
             if not imagen:
@@ -63,26 +75,12 @@ def cargar_factura(request):
             facturas_procesadas = request.session.get('facturas_procesadas', [])
             facturas_procesadas.append(factura_procesada)
             request.session['facturas_procesadas'] = facturas_procesadas
-            print("Facturas procesadas:", facturas_procesadas)
 
-            # Renderizar la plantilla con los datos
-            print("Datos que se pasan a la plantilla (facturas_procesadas):", facturas_procesadas) # Debug adicional
-            return render(request, 'gestion_facturas/confirmar_datos.html', {
-                'facturas': facturas_procesadas,
-                'debug': settings.DEBUG
-            })
-
+            return redirect('gestion_facturas:confirmar_datos')
         except Exception as e:
-            print(f"Error en cargar_factura: {str(e)}")
-            messages.error(request, 'Hubo un problema al procesar la factura. Por favor, intente nuevamente o contacte al soporte técnico')
-            # Limpiar la sesión en caso de error antes de redirigir
-            if 'facturas_procesadas' in request.session:
-                del request.session['facturas_procesadas']
+            messages.error(request, f'Error al procesar la factura: {str(e)}')
             return redirect('gestion_facturas:cargar_factura')
-
-    # Si es un método GET (carga inicial o redirección después de procesar/cancelar), limpiar la sesión
-    if 'facturas_procesadas' in request.session:
-        del request.session['facturas_procesadas']
+    
     return render(request, 'gestion_facturas/cargar_factura.html')
 
 def confirmar_datos(request):
@@ -107,32 +105,34 @@ def confirmar_datos(request):
                 
                 factura.save()
             
-            # Limpiar archivos temporales
-            rutas_temporales = request.session.get('rutas_temporales', [])
-            for ruta in rutas_temporales:
-                try:
-                    if os.path.exists(ruta):
-                        os.remove(ruta)
-                except Exception as e:
-                    print(f"Error al eliminar archivo temporal: {str(e)}")
-            
-            # Limpiar la sesión
+            # Limpiar caché y archivos temporales después de guardar
+            if 'facturas_procesadas' in request.session:
+                del request.session['facturas_procesadas']
             if 'rutas_temporales' in request.session:
+                for ruta in request.session['rutas_temporales']:
+                    try:
+                        if os.path.exists(ruta):
+                            os.remove(ruta)
+                    except Exception as e:
+                        print(f"Error al eliminar archivo temporal: {str(e)}")
                 del request.session['rutas_temporales']
             
             messages.success(request, '¡Las facturas se han guardado correctamente!')
             return redirect('gestion_facturas:index')
         except Exception as e:
             messages.error(request, 'No se pudieron guardar las facturas. Por favor, verifique los datos e intente nuevamente')
-            # Limpiar la sesión en caso de error antes de redirigir
-            if 'facturas_procesadas' in request.session:
-                del request.session['facturas_procesadas']
             return redirect('gestion_facturas:cargar_factura')
     
-    # Limpiar la sesión si se accede directamente por GET (ej. al cancelar del front-end)
-    if 'facturas_procesadas' in request.session:
-        del request.session['facturas_procesadas']
-    return redirect('gestion_facturas:cargar_factura')
+    # Si es GET, mostrar el formulario con los datos procesados
+    facturas = request.session.get('facturas_procesadas', [])
+    if not facturas:
+        messages.error(request, 'No hay facturas para confirmar')
+        return redirect('gestion_facturas:cargar_factura')
+    
+    return render(request, 'gestion_facturas/confirmar_datos.html', {
+        'facturas': facturas,
+        'debug': settings.DEBUG
+    })
 
 def lista_facturas(request):
     facturas = Factura.objects.all().order_by('-fecha_emision')

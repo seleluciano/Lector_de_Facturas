@@ -275,14 +275,13 @@ def extraer_datos_factura(texto):
             r'DNI:\s*(\d{2}[-\s]?\d{8}[-\s]?\d{1})'
         ],
         'cuit_emisor': [
+            r'CUIT:\s*(\d{2}-\d{8}-\d{1})',  # Patrón específico para el formato con guiones
+            r'CUIT\s*[.:\s]*(\d{2}[-\s]?\d{8}[-\s]?\d{1})',
             r'Domicilio\s*Comercial:[^\n]*CUIT:\s*(\d{2}[-\s]?\d{8}[-\s]?\d{1})',
-            r'CUIT:\s*(\d{2}[-\s]?\d{8}[-\s]?\d{1})',
             r'(?:CUIT|CUIL)\s*(?:Emisor|Vendedor|Empresa)[.:\s]*(\d{2}[-\s]?\d{8}[-\s]?\d{1})',
             r'(?:CUIT|CUIL)\s*[.:\s]*(\d{2}[-\s]?\d{8}[-\s]?\d{1})',
             r'Raz[oó]n\s*Social[^\n]*CUIT:\s*(\d{2}[-\s]?\d{8}[-\s]?\d{1})',
-            r'Global\s*Networks[^\n]*CUIT:\s*(\d{2}[-\s]?\d{8}[-\s]?\d{1})',
-            r'CUIT:\s*(\d{2}[-\s]?\d{8}[-\s]?\d{1})',
-            r'CUIT:\s*(\d{2}-\d{8}-\d{1})'  # Patrón específico para el formato con guiones
+            r'Global\s*Networks[^\n]*CUIT:\s*(\d{2}[-\s]?\d{8}[-\s]?\d{1})'
         ],
         'razon_social_emisor': [
             r'(?:Raz[oó]n\s*Social|Denominaci[oó]n|Empresa|Vendedor)\s*(?:Emisor|Vendedor|Empresa)[.:\s]*([^\n]+?)(?:\s*Fecha|$)',
@@ -292,8 +291,8 @@ def extraer_datos_factura(texto):
             r'Vendedor[.:\s]*([^\n]+?)(?:\s*Fecha|$)',
             r'Empresa[.:\s]*([^\n]+?)(?:\s*Fecha|$)',
             r'Raz[oó]n\s*Soclal[.:\s]*([^\n]+?)(?:\s*Fecha|$)',
-            r'Raz[oó]n\s*Soclal:\s*([^\n]+?)(?:\s*CUIT|$)',  # Patrón específico para "Razón Soclal: Tech Consulting SRL"
-            r'Raz[oó]n\s*Soclal:\s*([^\n]+?)(?:\s*CUIT|$)'  # Patrón específico para cuando termina en CUIT
+            r'Raz[oó]n\s*Soclal:\s*([^\n]+?)(?:\s*CUIT|$)',
+            r'Raz[oó]n\s*Soclal:\s*([^\n]+?)(?:\s*CUIT|$)'
         ],
         'monto_total': [
             rf'Importe\s*Total:\s*\$?\s*{patron_valor_numerico}',
@@ -317,7 +316,7 @@ def extraer_datos_factura(texto):
             rf'I\.V\.A\. ?:?\s*\$?\s*{patron_valor_numerico}',
             rf'IVA\s*Discriminado:\s*\$?\s*{patron_valor_numerico}',
             rf'IVA\s*Inscripto:\s*\$?\s*{patron_valor_numerico}',
-            rf'NA:\s*\$?\s*{patron_valor_numerico}'  # Para el caso específico de "NA: $7.639,80"
+            rf'NA:\s*\$?\s*{patron_valor_numerico}'
         ],
         'percepcion_iibb': [
             rf'Percepci[oó]n\s*IIBB:\s*\$?\s*{patron_valor_numerico}',
@@ -325,7 +324,7 @@ def extraer_datos_factura(texto):
             rf'IIBB\s*(?:\d+%?)?:\s*\$?\s*{patron_valor_numerico}',
             rf'Percepci[oó]n\s*Ingresos\s*Brutos:\s*\$?\s*{patron_valor_numerico}',
             rf'Percepci[oó]n\s*IB:\s*\$?\s*{patron_valor_numerico}',
-            rf'Percepci[oó]n\s*!IBB:\s*\$?\s*{patron_valor_numerico}'  # Para el caso específico de "Percepción !IBB"
+            rf'Percepci[oó]n\s*!IBB:\s*\$?\s*{patron_valor_numerico}'
         ],
         'otros_tributos': [
             rf'Otros\s*Tributos:\s*\$?\s*{patron_valor_numerico}',
@@ -337,12 +336,12 @@ def extraer_datos_factura(texto):
         'condicion_venta': [
             r'Condici[oó]n\s*(?:de\s*)?Venta:\s*([^\n]+)',
             r'Forma\s*de\s*Pago:\s*([^\n]+)',
-            r'Congici[oó]n\s*de\s*venta:\s*([^\n]+)'  # Para el caso específico de "Congición de venta"
+            r'Congici[oó]n\s*de\s*venta:\s*([^\n]+)'
         ],
         'condicion_iva': [
             r'Condici[oó]n\s*IVA:\s*([^\n]+)',
             r'Condici[oó]n\s*frente\s*al\s*IVA:\s*([^\n]+)',
-            r'Condici[oó]n\s*frente\s*al\s*A:\s*([^\n]+)'  # Para el caso específico de "Condición frente al A"
+            r'Condici[oó]n\s*frente\s*al\s*A:\s*([^\n]+)'
         ],
         'tipo_copia': [
             r'(Original|Duplicado)',
@@ -350,8 +349,8 @@ def extraer_datos_factura(texto):
         ],
         'razon_social_cliente': [
             r'(?:Raz[oó]n\s*Social|Cliente|Denominaci[oó]n|Nombre\s*o\s*Raz[oó]n\s*Social)[.:\s]*([^\n]+)',
-            r'Apellido\s*y\s*Nombra\s*/\s*Raz[oó]n\s*Soclal:\s*([^\n]+)', 
-            r'Apellido\s*y\s*Nombra\s*/\s*Raz[oó]n\s*Soclal:\s*([^\n]+)'  # Para el caso específico de "Apellido y Nombra / Razón Soclal"
+            r'Apellido\s*y\s*Nombra\s*/\s*Raz[oó]n\s*Soclal:\s*([^\n]+)',
+            r'Apellido\s*y\s*Nombra\s*/\s*Raz[oó]n\s*Soclal:\s*([^\n]+)'
         ]
     }
 
@@ -370,8 +369,9 @@ def extraer_datos_factura(texto):
                 # Buscar el CUIT del emisor
                 matches = list(re.finditer(patron, texto, re.IGNORECASE))
                 if matches:
+                    # Tomar el primer CUIT encontrado (asumiendo que es el de la empresa)
                     datos['cuit_emisor'] = matches[0].group(1)
-                break
+                    break
             else:
                 match = re.search(patron, texto, re.IGNORECASE)
                 if match:
